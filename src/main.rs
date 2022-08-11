@@ -1,5 +1,4 @@
-use chess::MoveGen;
-use chess::{Board, BoardStatus};
+use chess::{MoveGen, Game, Board};
 use chess::EMPTY;
 
 
@@ -7,14 +6,19 @@ use chess::EMPTY;
 
 fn main() {
     println!("Hello, world!");
-    // create a board with the initial position
-    let mut board = Board::default();
-
+    // create a game
+    let mut board: Board;
+    let mut game: Game = Game::new();
     loop {
-        if board.status() != BoardStatus::Ongoing {
+        board = game.current_position();
+        if !game.result().is_none() {
+            println!("Game Over");
+            break
+        } else if game.can_declare_draw() {
+            println!("Draw");
             break
         }
-        let mut movegen = MoveGen::new_legal(&board);
+        let mut movegen: MoveGen = MoveGen::new_legal(&board);
         let targets = board.color_combined(!board.side_to_move());
         // look for targets first
         movegen.set_iterator_mask(*targets);
@@ -22,9 +26,10 @@ fn main() {
             // if there are no targets to capture, make a non-capture move instead
             movegen.set_iterator_mask(!EMPTY);
         }
+        println!("{} possible moves", movegen.len());
         for mv in &mut movegen {
             println!("Making move: {}", mv);
-            board = board.make_move_new(mv);
+            game.make_move(mv);
             break
 
         }
