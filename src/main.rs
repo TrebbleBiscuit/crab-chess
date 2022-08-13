@@ -1,10 +1,12 @@
-use chess::{MoveGen, Game, Board, ALL_PIECES, Piece, BoardStatus, ChessMove, Square};
+use chess::{MoveGen, Game, Board, ALL_PIECES, Piece, BoardStatus, ChessMove, Square, Color};
 use chess::Piece::{Pawn, Knight, Bishop, Rook, Queen, King};
 // use chess::EMPTY;
 use chess::Color::{White, Black};
 // use std::collections::HashMap;
 use std::str::FromStr;
 use std::env;
+use std::time::Instant;
+use std::cmp::Ordering;
 
 // Piece-Square Tables
 const PAWN_PST: [i32; 64] = [   0,   0,   0,   0,   0,   0,   0,   0,
@@ -67,6 +69,9 @@ const KING_PST: [i32; 64] = [   4,  54,  47, -99, -99,  60,  83, -62,
             17,  30,  -3, -14,   6,  -1,  40,  18
 ];
 
+// TODO: arrays are not slower so just use them instead so we can do this
+// const KING_WHITE_PST: [i32; 64] = KING_PST.iter().copied().rev().collect();
+
 
 
 // scores.insert(String::from("Blue"), 10);
@@ -76,16 +81,34 @@ const KING_PST: [i32; 64] = [   4,  54,  47, -99, -99,  60,  83, -62,
 //     println!("{}", std::any::type_name::<T>())
 // }
 
-fn evaluate_material(board: &Board) -> i32{
+// fn piece_value(piece:Piece) -> i32 {
+//     match piece {
+//         Pawn => 100,
+//         Knight => 320,
+//         Bishop => 330,
+//         Rook => 500,
+//         Queen => 900,
+//         King => 10000
+//     }
+// }
 
-    fn value_at_square(piece: Piece, square: usize) -> i32 {
+fn evaluate_material(board: &Board) -> i32{
+    let side = board.side_to_move();
+    // Returns a positive value if the player whose turn it is is winning 
+    fn value_at_square(piece: Piece, square: usize, side: Color) -> i32 {
+        // SUPER ABSURDLY SLOW
+        // let index: usize;
+        // match side {
+        //     White => index = 63-square,
+        //     Black => index = square
+        // }
         match piece {
-            Pawn => PAWN_PST[square] + 100,
-            Knight => KNIGHT_PST[square] + 320,
-            Bishop => BISHOP_PST[square] + 330,
-            Rook => ROOK_PST[square] + 500,
-            Queen => QUEEN_PST[square] + 900,
-            King => KING_PST[square]
+            Pawn => PAWN_PST[index] + 100,
+            Knight => KNIGHT_PST[index] + 320,
+            Bishop => BISHOP_PST[index] + 330,
+            Rook => ROOK_PST[index] + 500,
+            Queen => QUEEN_PST[index] + 900,
+            King => KING_PST[index]
         }
     }
 
@@ -94,9 +117,10 @@ fn evaluate_material(board: &Board) -> i32{
     for piece in ALL_PIECES {
         for square in *board.pieces(piece) {
             let color = board.color_on(square);
+            let value = value_at_square(piece, square.to_index(), side);
             match color {
-                Some(White) => total_score += value_at_square(piece, square.to_index()),
-                Some(Black) => total_score -= value_at_square(piece, square.to_index()),
+                Some(White) => total_score += value,
+                Some(Black) => total_score -= value,
                 None => panic!("no piece here"),
             }
         }
@@ -108,9 +132,13 @@ fn evaluate_material(board: &Board) -> i32{
 }
 
 fn search(board: &Board, depth: usize, mut alpha: i32, beta: i32) -> (i32, ChessMove){
-    let default_move = ChessMove::new(Square::E2, Square::E4, None);
+    // Search for the best move using alpha-beta pruning
+    let default_move = ChessMove::new(Square::A1, Square::A1, None);
     if depth == 0 {
-        return (evaluate_material(board), default_move)
+        // assumes depth > 0 when this fn is called for the first time
+        // otherwise it will return default_move
+        // return (evaluate_material(board), default_move)
+        return (search_only_captures(board, alpha, beta), default_move)
     }
 
     let mut movegen: MoveGen = MoveGen::new_legal(&board);
@@ -122,9 +150,15 @@ fn search(board: &Board, depth: usize, mut alpha: i32, beta: i32) -> (i32, Chess
         }
     }
     let mut best_move: ChessMove = default_move;
+    // let mut moves_searched = Vec::new();
+    // let mut move_values = Vec::new();
     for mv in &mut movegen {
         let nboard = board.make_move_new(mv);
         let (move_search_score, _next_move) = search(&nboard, depth-1, -beta, -alpha);
+        // if depth == 4 {
+        //     moves_searched.push(mv);
+        //     move_values.push(move_search_score);
+        // }
         let evaluation = -move_search_score;
         if evaluation >= beta { 
             return (beta, default_move);
@@ -134,19 +168,65 @@ fn search(board: &Board, depth: usize, mut alpha: i32, beta: i32) -> (i32, Chess
             best_move = mv;
         }
     }
+    // if depth == 4 {
+    //     let index_of_max: Option<usize> = move_values
+    //         .iter()
+    //         .enumerate()
+    //         .max_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap_or(Ordering::Equal))
+    //         .map(|(index, _)| index);
+    //     println!("{:?}, {:?}, {:?}", index_of_max, moves_searched, move_values);
+    // }
     return (alpha, best_move)
-    // let targets = board.color_combined(!board.side_to_move());
-    // // look for targets first
-    // movegen.set_iterator_mask(*targets);
-    // if movegen.len() == 0 {
-    //     // if there are no targets to capture, make a non-capture move instead
-    //     movegen.set_iterator_mask(!EMPTY);
-    // }
-    // println!("{} possible moves", movegen.len());
-    // for mv in &mut movegen {
-    //     game.make_move(mv);
-    //     break
-    // }
+
+}
+
+// fn list_moves_in_order(moves: MoveGen) {
+//     for mv in moves {
+//         let mut est_value: i32 = 0;
+//         match mv.get_promotion() {
+//             Some(piece) => est_value += piece_value(piece),
+//             _ => (),
+//         }
+//     }
+// }
+
+
+
+fn search_only_captures(board: &Board, mut alpha: i32, beta: i32) -> i32{
+    // Search for the best move using alpha-beta pruning
+    // This time, only look for captures at infinite depth
+    let evaluation = evaluate_material(board);
+    if evaluation >= beta {
+        return beta;
+    }
+    if evaluation > alpha {
+        alpha = evaluation;
+    }
+    // filter targets
+    let targets = board.color_combined(!board.side_to_move());
+    let mut movegen: MoveGen = MoveGen::new_legal(&board);
+    movegen.set_iterator_mask(*targets);
+    if movegen.len() == 0 {
+        if board.status() == BoardStatus::Checkmate {
+            return i32::from(-999999)
+        } else if board.status() == BoardStatus::Stalemate {
+            return i32::from(0)
+        }
+        // no attacking moves does not mean stalemate here
+    }
+    for mv in &mut movegen {
+        let nboard = board.make_move_new(mv);
+        let move_search_score = search_only_captures(&nboard, -beta, -alpha);
+        let evaluation = -move_search_score;
+        if evaluation >= beta { 
+            return beta;
+        }
+        if evaluation > alpha {
+            alpha = evaluation;
+        }
+    }
+    return alpha
+
 }
 
 fn main() {
@@ -165,9 +245,13 @@ fn main() {
     } else {
         game.current_position()
     };
+    println!("{:?} to move", board.side_to_move());
     //let mut board = game.current_position();
     println!("Evaluation: {:?}", evaluate_material(&board));
-    let (value, mv) = search(&board, 4, -9999999, 9999999);
+    let start_time = Instant::now();
+    let (value, mv) = search(&board, 2, -9999999, 9999999);
+    let elapsed_time = start_time.elapsed();
+    println!("Search took {} seconds", (elapsed_time.as_secs()));
     println!("Search: {:?} @ {}", mv, value);
     
     // loop {
