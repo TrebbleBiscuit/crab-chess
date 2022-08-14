@@ -374,6 +374,8 @@ fn main() {
     let mut board: Board;
     loop {
         board = game.current_position();
+        println!("Board hash: {}; fen: {}", board.get_hash(), board.to_string());
+        // println!("{:?}", game.actions());
         let to_move = board.side_to_move();
         println!("{:?} to move", to_move);
         if !game.result().is_none() {
