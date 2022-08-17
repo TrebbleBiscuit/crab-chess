@@ -2,37 +2,37 @@
 
 Basic chess engine experiment with Rust
 
-- Cheap pre-analysis move ordering
 - Alpha-beta pruning
-- Configurable iterative deepening
+- Iterative deepening
 - Infinite depth for capture moves
+- Tiny transitory transposition table
 - Piece-Square tables
+
+
+### How to build
+
+You'll need rust https://rustup.rs/
+
+Open a terminal in this repository and
+```
+cargo build --release
+```
+
 
 ### How to run
 
-``` sh
-cargo run
+Supply up to two command-line arguments
+```sh
+target/debug/crab-chess black "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
 ```
+- `black` - Human plays as this color against the AI
+- `"rnbqkb...` - FEN string to start from a particular board position
 
-Or if you want the nice pretty logging messages:
+Debug logging messages include FEN strings so that you can ~~savescum~~ return to previous positions
 
-```
-cargo build
-RUST_LOG=info target/debug/crab-chess
-```
 
-Replace `info` with one of these increasingly verbose logging levels: `error`, `warn`, `info`, `debug`, `trace`, 
+### Logging
 
-### Specific positions
+Configure logging verbosity with the `CRAB_CHESS` environment variable
 
-This program takes a fen as an argument, so you can do
-
-``` sh
-cargo run "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
-```
-
-or
-
-``` sh
-target/debug/crab-chess "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
-```
+Replace `info` (default) with one of these increasingly verbose logging levels: `error`, `warn`, `info`, `debug`, `trace`

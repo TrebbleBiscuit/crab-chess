@@ -3,11 +3,8 @@ use chess::{MoveGen, Board, ALL_PIECES, Piece, BoardStatus, ChessMove, Square};
 use chess::Color::{White, Black};
 use std::time::{Instant, Duration};
 use std::collections::HashMap;
-use std::io::{self, Write};
-use std::env;
-use std::str::FromStr;
-use log::{debug, error, warn, trace, info};
-
+use log::{debug, trace, info};
+use indicatif::{ProgressBar, ProgressStyle};
 
 pub struct EvaluatorBot2010 {
     // board: Board,
@@ -23,7 +20,9 @@ pub struct EvaluatorBot2010 {
     rook_w_pst: Vec<i32>,
     queen_w_pst: Vec<i32>,
     king_w_pst: Vec<i32>,
-    piece_values: HashMap<Piece, i32>
+    piece_values: HashMap<Piece, i32>,
+    transposition_table: HashMap<String, (i32, ChessMove)>,
+    trans_table_depth_threshold: usize
 }
 
 impl EvaluatorBot2010 {
@@ -61,6 +60,26 @@ impl EvaluatorBot2010 {
         }
     }
 
+    fn push_to_transposition_table(&mut self, hash: u64, depth: usize, score: i32, mv: ChessMove) {
+        trace!("Pushing {} to transposition table at depth {}", hash, depth);
+        self.transposition_table.insert(String::from(format!("{}-{}", hash, depth)), (score, mv));
+    }
+
+    fn get_from_transposition_table(&self, hash: u64, depth: usize) -> Option<&(i32, ChessMove)>{
+        // get value from the transposition table
+        let mut val = None;
+        for try_depth in depth..=10 {
+            match self.transposition_table.get(&String::from(format!("{}-{}", hash, try_depth))) {
+                Some(cache_val) => {
+                    debug!("got {:?} from transpo table", cache_val);
+                    val = Some(cache_val)
+                },
+                None => ()
+            }
+        }
+        return val
+    }
+
     fn get_move_order(&self, board: &Board, move_iterator: MoveGen) -> Vec<ChessMove> {
         // Pass in a MoveGen to grab moves from
         // returns a vector of moves lazily ordered by guess of which is best
@@ -91,7 +110,7 @@ impl EvaluatorBot2010 {
         ordered_moves
     }
 
-    pub fn iterative_search_deepening(&self, board: &Board, depth: usize, time_low_bar: Duration) -> (i32, ChessMove) {
+    pub fn iterative_search_deepening(&mut self, board: &Board, depth: usize, time_low_bar: Duration) -> (i32, ChessMove) {
         let start_time = Instant::now();
         let mut elapsed;
         let mut score: i32 = 111111;
@@ -111,7 +130,7 @@ impl EvaluatorBot2010 {
             (score, chosen_move, move_order) = self.top_level_search(board, n, move_order);
             // println!("Move order: {:?}", move_order);
             elapsed = start_time.elapsed();
-            info!("Depth: {} - {:?}", n, elapsed);
+            info!("Depth: {} - {} @ {} - {:?}", n, chosen_move, score, elapsed);
             // println!("Depth: {} - {:?}, Move order: {:?}", n, elapsed, move_order);
             if n >= depth {
                 debug!("Reached maximum depth...");
@@ -124,63 +143,81 @@ impl EvaluatorBot2010 {
         return (score, chosen_move)
     }
 
-    fn top_level_search(&self, board: &Board, depth: usize, move_order: Vec<ChessMove>) -> (i32, ChessMove, Vec<ChessMove>) {
+    fn top_level_search(&mut self, board: &Board, depth: usize, move_order: Vec<ChessMove>) -> (i32, ChessMove, Vec<ChessMove>) {
         let mut alpha = -999999;
         let beta = 999999;
         // Search for the best move using alpha-beta pruning
         // assumes depth > 0
+
+        match self.get_from_transposition_table(board.get_hash(), depth) {
+            Some(cache_info) => {
+                trace!("Returning info from cache lvl {}: {:?}", depth, cache_info);
+                let (score, best_move) = *cache_info;
+                return (score, best_move, move_order)
+            }
+            None => ()
+        }
         
         let mut best_move = ChessMove::new(Square::A1, Square::A1, None);  // default;
         // let mut moves_searched = Vec::new();
         let mut move_values: Vec<(ChessMove, i32)> = Vec::new();
         debug!("Searching {} moves at depth {}", move_order.len(), depth);
+        let bar = ProgressBar::new(move_order.len() as u64);
+        bar.set_style(ProgressStyle::with_template("[{elapsed} - ETA: {eta}] {bar:40.cyan/blue} {pos:>7}/{len:7} {msg}")
+            .unwrap()
+            .progress_chars("##-"));
         for mv in move_order {
-            trace!("  {}", mv.to_string());
+            bar.inc(1);
+            // trace!("  {}", mv.to_string());
             let nboard = board.make_move_new(mv);
             let (move_search_score, _best_response_mv) = self.search(&nboard, depth-1, -beta, -alpha);
             // move_search_score is the score of the best response move from our opponent
             // invert it; we'll pick the move with the highest score - gives our opponent the worst best response
             let evaluation = -move_search_score;
             move_values.push((mv, evaluation));
-            
+
             if evaluation > alpha {
                 alpha = evaluation;
                 best_move = mv;
-                trace!("    ->{}!! ", evaluation);
+                // trace!("    ->{}!! ", evaluation);
             } else {
-                trace!("    ->{}  ", evaluation);
+                // trace!("    ->{}  ", evaluation);
                 // print!(".. ");
                 // io::stdout().flush().unwrap();
             }
         }
         trace!("");
-        // println!("move_values: {:?}", &move_values);
-        //     let index_of_max: Option<usize> = move_values
-        //         .iter()
-        //         .enumerate()
-        //         .max_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap_or(Ordering::Equal))
-        //         .map(|(index, _)| index);
-        //     println!("{:?}, {:?}, {:?}", index_of_max, moves_searched, move_values);
-        // let (v1, v2): (ChessMove, i32) = move_values.iter().cloned().unzip();
         move_values.sort_by(|a, b| b.1.cmp(&a.1));
-        // println!("SORTED: {:#?}", move_values);
+        // trace!("Sored move values: {:#?}", move_values);
         let mut order_moves: Vec<ChessMove> = Vec::new();
         // order moves from best to worst
         for (mv, _) in move_values.iter() {
             order_moves.push(*mv)
         }
+
+        if depth >= self.trans_table_depth_threshold {
+            self.push_to_transposition_table(board.get_hash(), depth, alpha, best_move)
+        }
+
         // println!("order_moves: {:?}", order_moves);
         return (alpha, best_move, order_moves)
     }
 
-    fn search(&self, board: &Board, depth: usize, mut alpha: i32, beta: i32) -> (i32, ChessMove){
+    fn search(&mut self, board: &Board, depth: usize, mut alpha: i32, beta: i32) -> (i32, ChessMove){
         // Search for the best move using alpha-beta pruning
         let default_move = ChessMove::new(Square::A1, Square::A1, None);
         if depth == 0 {
             // assumes depth > 0 when this fn is called for the first time
             // otherwise it will return default_move
-            // return (self.evaluate_material(board), default_move)
             return (self.search_only_captures(board, alpha, beta), default_move)
+        }
+
+        match self.get_from_transposition_table(board.get_hash(), depth) {
+            Some(cache_info) => {
+                trace!("Returning info from cache lvl {}: {:?}", depth, cache_info);
+                return *cache_info
+            }
+            None => ()
         }
 
         let movegen: MoveGen = MoveGen::new_legal(&board);
@@ -211,12 +248,14 @@ impl EvaluatorBot2010 {
                 best_move = mv;
             }
         }
+
+        if depth >= self.trans_table_depth_threshold {
+            self.push_to_transposition_table(board.get_hash(), depth, best_score, best_move)
+        }
+
         return (best_score, best_move)
 
     }
-
-
-
 
 
     fn search_only_captures(&self, board: &Board, mut alpha: i32, beta: i32) -> i32{
@@ -225,7 +264,6 @@ impl EvaluatorBot2010 {
         let evaluation = self.evaluate_material(board);
         if evaluation >= beta {
             return evaluation;
-            // return beta;
         }
         if evaluation > alpha {
             alpha = evaluation;
@@ -249,7 +287,6 @@ impl EvaluatorBot2010 {
             let evaluation = -move_search_score;
             if evaluation >= beta { 
                 return evaluation
-                // return beta;
             }
             if evaluation > alpha {
                 alpha = evaluation;
@@ -332,7 +369,9 @@ pub fn create_evaluator() -> EvaluatorBot2010 {
         rook_w_pst: rook_pst.iter().copied().rev().collect(),
         queen_w_pst: queen_pst.iter().copied().rev().collect(),
         king_w_pst: king_pst.iter().copied().rev().collect(),
-        piece_values: [(Pawn, 100), (Knight, 330), (Bishop, 330), (Rook, 500), (Queen, 900), (King, 5000)].iter().cloned().collect()
+        piece_values: [(Pawn, 100), (Knight, 330), (Bishop, 330), (Rook, 500), (Queen, 900), (King, 5000)].iter().cloned().collect(),
+        transposition_table: HashMap::new(),
+        trans_table_depth_threshold: 5
     }
 }
 
