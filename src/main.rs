@@ -64,7 +64,7 @@ fn play_game() {
         }
         if player_color != to_move.to_index() {
             // AI's turn
-            let (value, mv) = evaluator.iterative_search_deepening(&board, &game, 7, Duration::new(10, 0));
+            let (value, mv) = evaluator.iterative_search_deepening(&board, &game, 6, Duration::new(10, 0));
             info!("{:?} AI Move: {} @ {}", to_move, mv.to_string(), value);
             // TODO: make_move will return default_move if it can't find a non-losing move
             // if it does so, may as well resign
