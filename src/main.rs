@@ -54,7 +54,7 @@ fn play_game() {
         debug!("Board hash: {}; fen: {}", board.get_hash(), board.to_string());
         // println!("{:?}", game.actions());
         let to_move = board.side_to_move();
-        info!("Move {} - {:?} to move", game.actions().len(), to_move);
+        info!("Move {} - {:?} to move", game.actions().len()+1, to_move);
         if !game.result().is_none() {
             info!("Game Over");
             break
@@ -64,7 +64,7 @@ fn play_game() {
         }
         if player_color != to_move.to_index() {
             // AI's turn
-            let (value, mv) = evaluator.iterative_search_deepening(&board, 7, Duration::new(10, 0));
+            let (value, mv) = evaluator.iterative_search_deepening(&board, &game, 7, Duration::new(10, 0));
             info!("{:?} AI Move: {} @ {}", to_move, mv.to_string(), value);
             // TODO: make_move will return default_move if it can't find a non-losing move
             // if it does so, may as well resign
@@ -91,16 +91,4 @@ fn play_game() {
             
         }
     }
-}
-
-fn _debug_evaluate() {
-    let args: Vec<String> = env::args().collect();
-    let board = if args.len() > 1 {
-        Board::from_str(args[1].as_str()).expect("Valid FEN")
-    } else {
-        Board::default()
-    };
-    let mut evaluator = create_evaluator();
-    let (value, mv) = evaluator.iterative_search_deepening(&board, 6, Duration::new(8, 0));
-    println!("{} @ {}", mv.to_string(), value);
 }
