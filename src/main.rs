@@ -66,9 +66,6 @@ fn play_game() {
             // AI's turn
             let (value, mv) = evaluator.iterative_search_deepening(&board, &game, 6, Duration::new(10, 0));
             info!("{:?} AI Move: {} @ {}", to_move, mv.to_string(), value);
-            // TODO: make_move will return default_move if it can't find a non-losing move
-            // if it does so, may as well resign
-            // but rn it keeps infinitely looping
             game.make_move(mv);
         } else {
             // Human's turn

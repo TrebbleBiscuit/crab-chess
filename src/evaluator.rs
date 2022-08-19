@@ -143,8 +143,8 @@ impl EvaluatorBot2010 {
     }
 
     fn top_level_search(&mut self, board: &Board, game: &Game, depth: usize, move_order: Vec<ChessMove>) -> (i32, ChessMove, Vec<ChessMove>) {
-        let mut alpha = -999999;
-        let beta = 999999;
+        let mut alpha = -9999999;  // this must be worse than losing
+        let beta = 9999999;
         // Search for the best move using alpha-beta pruning
         // assumes depth > 0
 
@@ -160,7 +160,7 @@ impl EvaluatorBot2010 {
         let mut best_move = ChessMove::new(Square::A1, Square::A1, None);  // default;
         // let mut moves_searched = Vec::new();
         let mut move_values: Vec<(ChessMove, i32)> = Vec::new();
-        debug!("Searching {} moves at depth {}", move_order.len(), depth);
+        // debug!("Searching {} moves at depth {}", move_order.len(), depth);
         let bar = ProgressBar::new(move_order.len() as u64);
         bar.set_style(ProgressStyle::with_template("[{elapsed} - ETA: {eta}] {bar:40.cyan/blue} {pos:>7}/{len:7} {msg}")
             .unwrap()
