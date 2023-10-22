@@ -278,7 +278,11 @@ impl EvaluatorBot2010 {
 
             // move_search_score is the score of the best response move from our opponent
             // invert it; we'll pick the move with the highest score - gives our opponent the worst best response
-            let evaluation = -move_search_score;
+            let evaluation = if game.can_declare_draw() {
+                0
+            } else {
+                -move_search_score
+            };
             move_values.push((mv, evaluation));
 
             if evaluation > alpha {
