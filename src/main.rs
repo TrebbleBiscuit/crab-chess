@@ -1,4 +1,4 @@
-use crate::evaluator::{create_evaluator, EvaluatorBot2010};
+use crate::evaluator::EvaluatorBot2010;
 use crate::speval::SinglePlayerEvaluator;
 use chess::Color::{Black, White};
 use chess::{Board, ChessMove, Game};
@@ -29,7 +29,7 @@ fn main() -> Result<(), ()> {
 fn wait_for_uci() -> Result<(), ()> {
     let mut uci_ok: bool = false;
     let mut game = Game::new();
-    let mut evaluator = create_evaluator();
+    let mut evaluator = EvaluatorBot2010::new();
     let move_depth = 5;
     for line in io::stdin().lock().lines() {
         let msg: UciMessage = parse_one(&line.unwrap());
@@ -51,7 +51,6 @@ fn wait_for_uci() -> Result<(), ()> {
                 fen,
                 moves,
             } => {
-                // Set up the starting position in the engine and play the moves e2-e4 and e7-e5
                 if startpos {
                     game = Game::new();
                 }
@@ -127,7 +126,7 @@ fn play_speval() {
 
     let mut board: Board;
     let sp_evaluator = SinglePlayerEvaluator::new();
-    let mut bot_evaluator = create_evaluator();
+    let mut bot_evaluator = EvaluatorBot2010::new();
     loop {
         board = game.current_position();
         debug!(
@@ -216,7 +215,7 @@ fn play_evaluator_bot_2010() {
         Game::new()
     };
 
-    let mut evaluator: evaluator::EvaluatorBot2010 = create_evaluator();
+    let mut evaluator: evaluator::EvaluatorBot2010 = EvaluatorBot2010::new();
     let mut board: Board;
     let move_depth: usize = if args.len() > 3 {
         args[3].parse::<usize>().unwrap()
