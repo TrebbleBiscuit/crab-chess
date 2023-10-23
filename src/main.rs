@@ -2,7 +2,6 @@ use crate::evaluator::EvaluatorBot2010;
 use crate::speval::SinglePlayerEvaluator;
 use chess::Color::{Black, White};
 use chess::{Board, ChessMove, Game};
-use env_logger::{self, Env};
 use log::{debug, error, info, warn};
 use std::env;
 use std::io::stdin;
@@ -10,13 +9,32 @@ use std::io::{self, BufRead};
 use std::str::FromStr;
 use std::time::Duration;
 use vampirc_uci::{parse_one, UciMessage};
-
 pub mod evaluator;
 pub mod speval;
 
 fn main() -> Result<(), ()> {
-    let env = Env::default().filter_or("CRAB_CHESS", "info");
-    env_logger::init_from_env(env);
+    // let env = Env::default().filter_or("CRAB_CHESS", "info");
+    // env_logger::init_from_env(env);
+
+    // let datetime_string = Utc::now().format("%Y-%m-%dT%H-%M-%S").to_string();
+    // let log_trace_file_name = format!("crablog/crab-log-trace-{}.log", datetime_string);
+    // simple_logging::log_to_file(log_trace_file_name, log::LevelFilter::Trace);
+
+    match flexi_logger::Logger::try_with_str("trace") {
+        Ok(my_logger) => {
+            my_logger
+                .log_to_file(
+                    flexi_logger::FileSpec::default()
+                        .directory("crab_logs") // create files in folder ./log_files
+                        .basename("crab")
+                        // .discriminant("log") // use infix in log file name
+                        .suffix("log"), // use suffix .trc instead of .log
+                ) // write logs to file
+                .duplicate_to_stderr(flexi_logger::Duplicate::Info) // print info also to the console
+                .start();
+        }
+        Err(_) => {}
+    }
 
     // play_evaluator_bot_2010();
     // play_speval()
@@ -30,7 +48,9 @@ fn wait_for_uci() -> Result<(), ()> {
     let mut uci_ok: bool = false;
     let mut game = Game::new();
     let mut evaluator = EvaluatorBot2010::new();
-    let move_depth = 5;
+    let move_depth = 9;
+    let default_think_time: i32 = 4000;
+    let mut think_time: i32 = default_think_time;
     for line in io::stdin().lock().lines() {
         let msg: UciMessage = parse_one(&line.unwrap());
         info!("Received message: {}", msg);
@@ -42,6 +62,7 @@ fn wait_for_uci() -> Result<(), ()> {
             }
             UciMessage::UciNewGame => {
                 game = Game::new();
+                think_time = default_think_time;
             }
             UciMessage::IsReady => {
                 println!("readyok");
@@ -67,15 +88,46 @@ fn wait_for_uci() -> Result<(), ()> {
                 time_control,
                 search_control,
             } => {
-                // if let Some(tc) = time_control {
-                //     ...
-                // }
+                if let Some(tc) = time_control {
+                    match tc {
+                        vampirc_uci::UciTimeControl::Ponder => {
+                            // pondering not implemented
+                            warn!("pondering not implemented!");
+                        }
+                        vampirc_uci::UciTimeControl::Infinite => {
+                            think_time = default_think_time;
+                        }
+                        vampirc_uci::UciTimeControl::TimeLeft {
+                            white_time,
+                            black_time,
+                            white_increment,
+                            black_increment,
+                            moves_to_go,
+                        } => {
+                            let remaining_time;
+                            match game.side_to_move() {
+                                White => remaining_time = white_time,
+                                Black => remaining_time = black_time,
+                            }
+                            if let Some(rem) = remaining_time {
+                                // think for, at most, half of the remaining time
+                                let max_think_time: i32 = (rem.num_milliseconds() / 2) as i32;
+                                think_time = think_time.min(max_think_time);
+                                debug!("Think time set to {}", think_time);
+                            }
+                        }
+                        vampirc_uci::UciTimeControl::MoveTime(time_ms) => {
+                            think_time = think_time.min(time_ms.num_milliseconds() as i32);
+                            // think_time = time_ms.num_milliseconds() as i32;
+                        }
+                    }
+                }
 
                 let (value, mv) = evaluator.iterative_search_deepening(
                     &game.current_position(),
                     &game,
                     move_depth,
-                    Duration::new(10, 0),
+                    Duration::from_millis(think_time as u64),
                 );
                 println!("bestmove {}", mv.to_string());
                 game.make_move(mv);

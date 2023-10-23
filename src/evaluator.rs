@@ -6,6 +6,23 @@ use log::{debug, info, trace};
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
 
+#[derive(Debug)]
+pub struct SearchStats {
+    nodes_searched: i32,
+    boards_evaluated: i32,
+    tt_hits: i32,
+}
+
+impl SearchStats {
+    fn new() -> Self {
+        Self {
+            nodes_searched: 0,
+            boards_evaluated: 0,
+            tt_hits: 0,
+        }
+    }
+}
+
 pub struct EvaluatorBot2010 {
     pawn_pst: Vec<i32>,
     knight_pst: Vec<i32>,
@@ -20,8 +37,9 @@ pub struct EvaluatorBot2010 {
     queen_w_pst: Vec<i32>,
     king_w_pst: Vec<i32>,
     piece_values: HashMap<Piece, i32>,
-    transposition_table: HashMap<String, (i32, ChessMove)>,
+    transposition_table: HashMap<u64, (i32, ChessMove, usize)>,
     trans_table_depth_threshold: usize,
+    search_stats: SearchStats,
 }
 
 impl EvaluatorBot2010 {
@@ -87,7 +105,8 @@ impl EvaluatorBot2010 {
             .cloned()
             .collect(),
             transposition_table: HashMap::new(),
-            trans_table_depth_threshold: 5,
+            trans_table_depth_threshold: 4,
+            search_stats: SearchStats::new(),
         }
     }
 
@@ -126,29 +145,43 @@ impl EvaluatorBot2010 {
 
     fn push_to_transposition_table(&mut self, hash: u64, depth: usize, score: i32, mv: ChessMove) {
         trace!("Pushing {} to transposition table at depth {}", hash, depth);
-        self.transposition_table
-            .insert(String::from(format!("{}-{}", hash, depth)), (score, mv));
+        self.transposition_table.insert(hash, (score, mv, depth));
+        let tt_value_size = std::mem::size_of::<u64>()
+            + std::mem::size_of::<u64>()
+            + std::mem::size_of::<usize>()
+            + std::mem::size_of::<usize>()
+            + std::mem::size_of::<ChessMove>();
+        trace!(
+            "TT Size is now {} x {}",
+            self.transposition_table.len(),
+            tt_value_size
+        );
     }
 
-    fn get_from_transposition_table(&self, hash: u64, depth: usize) -> Option<&(i32, ChessMove)> {
+    fn get_from_transposition_table(
+        &mut self,
+        hash: u64,
+        depth: usize,
+    ) -> Option<(i32, ChessMove)> {
         // get value from the transposition table
-        let mut val = None;
-        for try_depth in depth..=10 {
-            match self
-                .transposition_table
-                .get(&String::from(format!("{}-{}", hash, try_depth)))
-            {
-                Some(cache_val) => {
-                    debug!("got {:?} from transpo table", cache_val);
-                    val = Some(cache_val)
+        let val;
+        match self.transposition_table.get(&hash) {
+            Some(cache_val) => {
+                if cache_val.2 < depth {
+                    // don't return a result if it's at a too-shallow depth
+                    debug!("transposition table result too shallow");
+                    return None;
                 }
-                None => (),
+                self.search_stats.tt_hits += 1;
+                debug!("got {:?} from transposition table", cache_val);
+                val = (cache_val.0, cache_val.1);
             }
+            None => return None,
         }
-        return val;
+        return Some(val);
     }
 
-    fn get_move_order(&self, board: &Board, move_iterator: MoveGen) -> Vec<ChessMove> {
+    fn get_move_order(&self, board: &Board, move_iterator: MoveGen) -> Vec<(ChessMove, i32)> {
         // Pass in a MoveGen to grab moves from
         // returns a vector of moves lazily ordered by guess of which is best
         let mut guess_values: Vec<(ChessMove, i32)> = Vec::new();
@@ -177,10 +210,10 @@ impl EvaluatorBot2010 {
         }
 
         guess_values.sort_by(|a, b| b.1.cmp(&a.1));
-        let mut ordered_moves: Vec<ChessMove> = Vec::new();
+        let mut ordered_moves: Vec<(ChessMove, i32)> = Vec::new();
         // order moves from best to worst
-        for (mv, _) in guess_values.iter() {
-            ordered_moves.push(*mv)
+        for (mv, score) in guess_values.iter() {
+            ordered_moves.push((*mv, *score))
         }
         ordered_moves
     }
@@ -194,7 +227,7 @@ impl EvaluatorBot2010 {
     ) -> (i32, ChessMove) {
         let start_time = Instant::now();
         let mut score: i32 = 111111;
-        let mut move_order: Vec<ChessMove> = Vec::new();
+        let mut move_order: Vec<(ChessMove, i32)> = Vec::new();
         let movegen: MoveGen = MoveGen::new_legal(&board);
         let mut chosen_move: ChessMove = ChessMove::new(Square::A1, Square::A1, None);
 
@@ -206,12 +239,6 @@ impl EvaluatorBot2010 {
             panic!("depth must be >= 3");
         }
         for n in 3..=depth {
-            // print!("move rankings: ");
-            // for mv in move_order.iter() {
-            //     print!("{} ", mv);
-            // }
-            // println!("");
-            // println!("Move order: {:?}", move_order);
             (score, chosen_move, move_order) =
                 self.top_level_search(board, game, n, move_order, kill_time);
             // println!("Move order: {:?}", move_order);
@@ -222,7 +249,14 @@ impl EvaluatorBot2010 {
                 score,
                 start_time.elapsed()
             );
-            // println!("Depth: {} - {:?}, Move order: {:?}", n, start_time.elapsed(), move_order);
+            debug!("{:?}", self.search_stats);
+
+            let mut move_scores_output = "Move scores: ".to_string();
+            for (mv, score) in move_order.iter() {
+                move_scores_output += format!(" {} @ {} ", mv, score).as_str();
+            }
+            debug!("{}", move_scores_output);
+
             if n >= depth {
                 debug!("Reached maximum depth...");
                 return (score, chosen_move);
@@ -239,25 +273,31 @@ impl EvaluatorBot2010 {
         board: &Board,
         game: &Game,
         depth: usize,
-        move_order: Vec<ChessMove>,
+        move_order: Vec<(ChessMove, i32)>,
         kill_time: Instant,
-    ) -> (i32, ChessMove, Vec<ChessMove>) {
+    ) -> (i32, ChessMove, Vec<(ChessMove, i32)>) {
         let mut alpha = -9999999; // this must be worse than losing
         let beta = 9999999;
         // Search for the best move using alpha-beta pruning
         // assumes depth > 0
 
-        // match self.get_from_transposition_table(board.get_hash(), depth) {
-        //     Some(cache_info) => {
-        //         trace!("Returning info from cache lvl {}: {:?}", depth, cache_info);
-        //         let (score, best_move) = *cache_info;
-        //         return (score, best_move, move_order)
-        //     }
-        //     None => ()
-        // }
+        match self.get_from_transposition_table(board.get_hash(), depth) {
+            Some(cache_info) => {
+                trace!(
+                    "Returning info from search depth {}: {:?}",
+                    depth,
+                    cache_info
+                );
+                let (score, best_move) = cache_info;
+                return (score, best_move, move_order);
+            }
+            None => (),
+        }
 
         let mut best_move = ChessMove::new(Square::A1, Square::A1, None); // default;
                                                                           // let mut moves_searched = Vec::new();
+
+        // return move_values at the end, it'll be like the new version of move_order
         let mut move_values: Vec<(ChessMove, i32)> = Vec::new();
         // debug!("Searching {} moves at depth {}", move_order.len(), depth);
         let bar = ProgressBar::new(move_order.len() as u64);
@@ -268,19 +308,25 @@ impl EvaluatorBot2010 {
             .unwrap()
             .progress_chars("##-"),
         );
-        for mv in move_order {
+        for (mv, old_eval) in move_order {
             bar.inc(1);
             // trace!("  {}", mv.to_string());
             let nboard = board.make_move_new(mv);
 
-            let (move_search_score, _best_response_mv) =
-                self.search(&nboard, game, depth - 1, -beta, -alpha);
-
-            // move_search_score is the score of the best response move from our opponent
-            // invert it; we'll pick the move with the highest score - gives our opponent the worst best response
-            let evaluation = if game.can_declare_draw() {
+            // here we create a totally new game and actually make the move
+            // the only way i could find to detect threefold repetition
+            // only doing this on top level search since i'm not sure how it performs
+            let mut hyp_game = game.clone();
+            hyp_game.make_move(mv);
+            let evaluation = if hyp_game.can_declare_draw() {
+                // don't search
                 0
             } else {
+                let (move_search_score, _best_response_mv) =
+                    self.search(&nboard, game, depth - 1, -beta, -alpha, kill_time);
+
+                // move_search_score is the score of the best response move from our opponent
+                // invert it; we'll pick the move with the highest score - gives our opponent the worst best response
                 -move_search_score
             };
             move_values.push((mv, evaluation));
@@ -300,19 +346,20 @@ impl EvaluatorBot2010 {
                 info!("Killing search because we're out of time");
                 break;
             }
+            self.search_stats.nodes_searched += 1;
         }
         trace!("");
         move_values.sort_by(|a, b| b.1.cmp(&a.1));
         // trace!("Sored move values: {:#?}", move_values);
-        let mut order_moves: Vec<ChessMove> = Vec::new();
+        let mut order_moves: Vec<(ChessMove, i32)> = Vec::new();
         // order moves from best to worst
-        for (mv, _) in move_values.iter() {
-            order_moves.push(*mv)
+        for (mv, val) in move_values.iter() {
+            order_moves.push((*mv, *val))
         }
 
-        // if depth >= self.trans_table_depth_threshold {
-        //     self.push_to_transposition_table(board.get_hash(), depth, alpha, best_move)
-        // }
+        if depth >= self.trans_table_depth_threshold && kill_time.elapsed() == Duration::ZERO {
+            self.push_to_transposition_table(board.get_hash(), depth, alpha, best_move)
+        }
 
         // println!("order_moves: {:?}", order_moves);
         return (alpha, best_move, order_moves);
@@ -325,6 +372,7 @@ impl EvaluatorBot2010 {
         depth: usize,
         mut alpha: i32,
         beta: i32,
+        kill_time: Instant,
     ) -> (i32, ChessMove) {
         // Search for the best move using alpha-beta pruning
         let default_move = ChessMove::new(Square::A1, Square::A1, None);
@@ -340,13 +388,18 @@ impl EvaluatorBot2010 {
             );
         }
 
-        // match self.get_from_transposition_table(board.get_hash(), depth) {
-        //     Some(cache_info) => {
-        //         trace!("Returning info from cache lvl {}: {:?}", depth, cache_info);
-        //         return *cache_info
-        //     }
-        //     None => ()
-        // }
+        match self.get_from_transposition_table(board.get_hash(), depth) {
+            Some(cache_info) => {
+                trace!(
+                    "Returning info from search depth {}: {:?}",
+                    depth,
+                    cache_info
+                );
+                let (score, best_move) = cache_info;
+                return (score, best_move);
+            }
+            None => (),
+        }
 
         let movegen: MoveGen = MoveGen::new_legal(&board);
         if movegen.len() == 0 {
@@ -358,10 +411,10 @@ impl EvaluatorBot2010 {
         }
         let mut best_move: ChessMove = default_move;
         let mut best_score = -999999; // this is distinct from alpha; it may be smaller if no moves are better
-        for mv in self.get_move_order(board, movegen) {
+        for (mv, _old_score) in self.get_move_order(board, movegen) {
             let nboard = board.make_move_new(mv);
-            let (move_search_score, _next_move) =
-                self.search(&nboard, game, depth - 1, -beta, -alpha);
+            let (move_search_score, next_move) =
+                self.search(&nboard, game, depth - 1, -beta, -alpha, kill_time);
             let evaluation = -move_search_score;
             if evaluation >= beta {
                 // position is too good; opponent would never let us get here
@@ -376,19 +429,32 @@ impl EvaluatorBot2010 {
                 best_score = evaluation;
                 best_move = mv;
             }
+            // cancel search if we're out of time
+            if kill_time.elapsed() > Duration::ZERO {
+                debug!("breaking from subsearch at kill time");
+                break;
+            }
+            self.search_stats.nodes_searched += 1;
         }
 
-        // if depth >= self.trans_table_depth_threshold {
-        //     self.push_to_transposition_table(board.get_hash(), depth, best_score, best_move)
-        // }
+        if depth >= self.trans_table_depth_threshold && kill_time.elapsed() == Duration::ZERO {
+            self.push_to_transposition_table(board.get_hash(), depth, best_score, best_move)
+        }
 
         return (best_score, best_move);
     }
 
-    fn search_only_captures(&self, board: &Board, game: &Game, mut alpha: i32, beta: i32) -> i32 {
+    fn search_only_captures(
+        &mut self,
+        board: &Board,
+        game: &Game,
+        mut alpha: i32,
+        beta: i32,
+    ) -> i32 {
         // Search for the best move using alpha-beta pruning
         // This time, only look for captures at infinite depth
         let evaluation = self.evaluate_material(board);
+        self.search_stats.boards_evaluated += 1;
         if evaluation >= beta {
             return evaluation;
         }
@@ -407,8 +473,9 @@ impl EvaluatorBot2010 {
             }
             // no attacking moves does not mean stalemate here
         }
-        let mut best_score = evaluation;
-        for mv in self.get_move_order(board, movegen) {
+        let mut best_score: i32 = evaluation;
+        for (mv, old_score) in self.get_move_order(board, movegen) {
+            self.search_stats.nodes_searched += 1;
             let nboard = board.make_move_new(mv);
             let move_search_score = self.search_only_captures(&nboard, game, -beta, -alpha);
             let evaluation = -move_search_score;
