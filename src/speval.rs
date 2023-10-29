@@ -1,11 +1,7 @@
-use chess::Color::{Black, White};
-use chess::Piece::{Bishop, King, Knight, Pawn, Queen, Rook};
-use chess::{Board, BoardStatus, ChessMove, Game, MoveGen, Piece, Square, ALL_PIECES};
-use indicatif::{ProgressBar, ProgressStyle};
-use log::{debug, info, trace};
+use chess::{Board, BoardStatus, ChessMove, MoveGen};
+use log::info;
 use rand::seq::IteratorRandom;
 use rand::seq::SliceRandom;
-use std::collections::HashMap;
 use std::time::{Duration, Instant};
 pub struct SinglePlayerEvaluator {}
 
@@ -14,17 +10,31 @@ impl SinglePlayerEvaluator {
         Self {}
     }
 
-    pub fn top_level_search(&self, board: &Board, depth: usize) -> ChessMove {
+    pub fn top_level_search(
+        &self,
+        board: &Board,
+        depth: usize,
+        max_search_time: Duration,
+    ) -> ChessMove {
         // search at increasing depths up to the maximum or until we find mate
+        let start_time = Instant::now();
+        let kill_time = start_time + max_search_time;
         for current_depth in 0..=depth {
-            if let Some(path_to_mate) = self.search(board, current_depth) {
-                info!("Found mate in {}", current_depth);
+            if let Some(path_to_mate) = self.search(board, current_depth, kill_time) {
+                info!(
+                    "Found mate in {} - {:?}",
+                    current_depth,
+                    start_time.elapsed()
+                );
                 return path_to_mate;
             }
         }
 
         // couldn't find a path to checkmate at this
-        info!("Couldn't find a path to checkmate! Selecting a random move.");
+        info!(
+            "Couldn't find a path to checkmate! Selecting a random move. - {:?}",
+            start_time.elapsed()
+        );
         let move_gen = MoveGen::new_legal(&board);
         return move_gen
             .into_iter()
@@ -36,8 +46,8 @@ impl SinglePlayerEvaluator {
         // );
     }
 
-    fn search(&self, board: &Board, depth: usize) -> Option<ChessMove> {
-        if depth == 0 {
+    fn search(&self, board: &Board, depth: usize, kill_time: Instant) -> Option<ChessMove> {
+        if depth == 0 || kill_time.elapsed() > Duration::ZERO {
             return None;
         }
         // it's our turn, look through all legal moves
@@ -70,7 +80,7 @@ impl SinglePlayerEvaluator {
                     )
                 }
             };
-            let future_result = self.search(&new_board, depth - 1);
+            let future_result = self.search(&new_board, depth - 1, kill_time);
             if let Some(_) = future_result {
                 // found a checkmate in our deeper search
                 return Some(possible_move);

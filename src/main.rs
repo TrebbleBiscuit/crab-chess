@@ -3,6 +3,7 @@ use crate::speval::SinglePlayerEvaluator;
 use chess::Color::{Black, White};
 use chess::{Board, ChessMove, Game};
 use log::{debug, error, info, warn};
+use std::collections::HashMap;
 use std::env;
 use std::io::stdin;
 use std::io::{self, BufRead};
@@ -11,6 +12,27 @@ use std::time::Duration;
 use vampirc_uci::{parse_one, UciMessage};
 pub mod evaluator;
 pub mod speval;
+use serde::{Deserialize, Serialize};
+
+// #[derive(Serialize, Deserialize, Debug)]
+// struct BookEntry {
+//     fen: String,
+//     move_map: std::collections::HashMap<String, i32>,
+// }
+
+fn program_file_name() -> String {
+    match env::current_exe()
+        .ok()
+        .as_ref()
+        .map(std::path::Path::new)
+        .and_then(std::path::Path::file_name)
+        .and_then(std::ffi::OsStr::to_str)
+        .map(String::from)
+    {
+        Some(name) => name,
+        None => "crab".to_string(),
+    }
+}
 
 fn main() -> Result<(), ()> {
     // let env = Env::default().filter_or("CRAB_CHESS", "info");
@@ -20,13 +42,17 @@ fn main() -> Result<(), ()> {
     // let log_trace_file_name = format!("crablog/crab-log-trace-{}.log", datetime_string);
     // simple_logging::log_to_file(log_trace_file_name, log::LevelFilter::Trace);
 
+    // println!("calling book test...");
+    // book_test();
+    // return Ok(());
+
     match flexi_logger::Logger::try_with_str("trace") {
         Ok(my_logger) => {
             my_logger
                 .log_to_file(
                     flexi_logger::FileSpec::default()
                         .directory("crab_logs") // create files in folder ./log_files
-                        .basename("crab")
+                        .basename(program_file_name())
                         // .discriminant("log") // use infix in log file name
                         .suffix("log"), // use suffix .trc instead of .log
                 ) // write logs to file
@@ -36,12 +62,37 @@ fn main() -> Result<(), ()> {
         Err(_) => {}
     }
 
+    let mut input;
+    loop {
+        input = String::new();
+        io::stdin()
+            .read_line(&mut input)
+            .expect("Failed to read line");
+        let input = input.trim(); // Remove the trailing newline character
+
+        match input {
+            "uci" => {
+                println!("uciok");
+                return wait_for_uci();
+            }
+            "crab" => {
+                bot_vs_bot();
+            }
+            "testpp" => evaluator::debug_pp(),
+            _ => {
+                println!("Unknown command. Try `uci`");
+            }
+        }
+    }
+
+    // bot_vs_bot();
     // play_evaluator_bot_2010();
+    // Ok(())
     // play_speval()
     // _debug_evaluate()
 
-    let result = wait_for_uci();
-    return result;
+    // let result = wait_for_uci();
+    return Ok(());
 }
 
 fn wait_for_uci() -> Result<(), ()> {
@@ -53,7 +104,10 @@ fn wait_for_uci() -> Result<(), ()> {
     let mut think_time: i32 = default_think_time;
     for line in io::stdin().lock().lines() {
         let msg: UciMessage = parse_one(&line.unwrap());
-        info!("Received message: {}", msg);
+        info!("Received message: {}", msg.to_string());
+        // if msg.to_string() == "dumptt" {
+        //     evaluator.dumptt();
+        // }
         match msg {
             UciMessage::Uci => {
                 // Initialize the UCI mode of the chess engine.
@@ -105,20 +159,37 @@ fn wait_for_uci() -> Result<(), ()> {
                             moves_to_go,
                         } => {
                             let remaining_time;
+                            let my_increment;
                             match game.side_to_move() {
-                                White => remaining_time = white_time,
-                                Black => remaining_time = black_time,
+                                White => {
+                                    remaining_time = white_time;
+                                    my_increment = white_increment;
+                                }
+                                Black => {
+                                    remaining_time = black_time;
+                                    my_increment = black_increment;
+                                }
                             }
                             if let Some(rem) = remaining_time {
+                                // how much longer will this game last? 10-70 moves
+                                let est_turns_remaining = 70 - game.actions().len().min(60);
+                                // this is how much time we'll burn from our clock
+                                let mut burn_time =
+                                    rem.num_milliseconds() as i32 / est_turns_remaining as i32;
+                                if let Some(inc) = my_increment {
+                                    // we'll also burn most of our increment time
+                                    burn_time += (inc.num_milliseconds() as f64 * 0.8) as i32;
+                                }
+
                                 // think for, at most, half of the remaining time
                                 let max_think_time: i32 = (rem.num_milliseconds() / 2) as i32;
-                                think_time = think_time.min(max_think_time);
+                                think_time = burn_time.min(max_think_time as i32);
                                 debug!("Think time set to {}", think_time);
                             }
                         }
                         vampirc_uci::UciTimeControl::MoveTime(time_ms) => {
-                            think_time = think_time.min(time_ms.num_milliseconds() as i32);
-                            // think_time = time_ms.num_milliseconds() as i32;
+                            // think_time = think_time.min(time_ms.num_milliseconds() as i32);
+                            think_time = time_ms.num_milliseconds() as i32;
                         }
                     }
                 }
@@ -215,7 +286,7 @@ fn play_speval() {
         // }
         if player_color != to_move.to_index() {
             // AI's turn
-            let mv = sp_evaluator.top_level_search(&board, move_depth);
+            let mv = sp_evaluator.top_level_search(&board, move_depth, Duration::from_secs(1));
             info!("{:?} AI Move: {}", to_move, mv.to_string());
             game.make_move(mv);
         } else {
@@ -242,6 +313,51 @@ fn play_speval() {
     }
 }
 
+fn bot_vs_bot() {
+    // let mut white_evaluator: evaluator::EvaluatorBot2010 = EvaluatorBot2010::new();
+    let mut white_evaluator = SinglePlayerEvaluator::new();
+    let mut black_evaluator: evaluator::EvaluatorBot2010 = EvaluatorBot2010::new();
+    let mut board: Board;
+    let move_depth: usize = 12;
+    let mut game = Game::new();
+    let mut move_duration = Duration::from_millis(300);
+    loop {
+        board = game.current_position();
+        debug!(
+            "Board hash: {}; fen: {}",
+            board.get_hash(),
+            board.to_string()
+        );
+        // println!("{:?}", game.actions());
+        let to_move = board.side_to_move();
+        info!("Move {} - {:?} to move", game.actions().len() + 1, to_move);
+        if !game.result().is_none() {
+            info!("Game Over");
+            break;
+        } else if game.can_declare_draw() {
+            info!("Draw");
+            break;
+        }
+        match to_move {
+            White => {
+                let mv = white_evaluator.top_level_search(&board, 5, move_duration);
+                info!("{:?} AI Move: {}", to_move, mv.to_string());
+                game.make_move(mv);
+            }
+            Black => {
+                let (value, mv) = black_evaluator.iterative_search_deepening(
+                    &board,
+                    &game,
+                    move_depth,
+                    move_duration,
+                );
+                info!("{:?} AI Move: {} @ {}", to_move, mv.to_string(), value);
+                game.make_move(mv);
+            }
+        }
+    }
+}
+
 fn play_evaluator_bot_2010() {
     let args: Vec<String> = env::args().collect();
     debug!("{:?}", args);
@@ -260,7 +376,7 @@ fn play_evaluator_bot_2010() {
         3
     };
     // use fen if provided as an argument, otherwise new game
-    let mut game = if args.len() > 2 {
+    let mut game: Game = if args.len() > 2 {
         info!("Creating game from FEN");
         Game::from_str(args[2].as_str()).expect("Valid FEN")
     } else {
@@ -272,7 +388,7 @@ fn play_evaluator_bot_2010() {
     let move_depth: usize = if args.len() > 3 {
         args[3].parse::<usize>().unwrap()
     } else {
-        6
+        12
     };
     loop {
         board = game.current_position();
