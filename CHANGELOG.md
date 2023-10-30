@@ -1,4 +1,43 @@
 
+### 0.0.14-rc2
+
+Evaluate a board as stronger if pawns have support and are not doubled up
+
+### 0.0.14-rc1
+
+- The player who is winning in the endgame should try and hug the enemy king
+
+### 0.0.13-rc9
+
+- In the endgame, it's good to have your king in the center
+
+### 0.0.13-rc8
+
+- Add endgame PST for pawns, start using it as the number of major pieces on the board decreases
+
+### 0.0.13-rc7
+
+- Tuned maximum sub-search depth (should not affect most positions)
+- Small refactor to use array instead of vector lookups for piece-square tables
+
+### 0.0.13-rc6
+
+- Implement position repetition detection in deep searches
+- Limit maximum search depth by a factor of minimum search depth to keep from looking extremely deep into lines from low depth searches
+
+### 0.0.13-rc5
+
+- Removed all search depth reductions, but kept extensions
+
+### 0.0.13-rc4
+
+- Added further reduction in search depth of later ordered moves at higher depths
+
+### 0.0.13-rc3 
+
+- Added `--quiet` argument, will disable writing to log
+- Fix return early during searches that encounter stalemate
+
 ### 0.0.12
 
 - Apply a bonus to passed pawns close to promotion

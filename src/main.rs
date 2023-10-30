@@ -11,6 +11,7 @@ use std::str::FromStr;
 use std::time::Duration;
 use vampirc_uci::{parse_one, UciMessage};
 pub mod evaluator;
+pub mod precomputed;
 pub mod speval;
 use serde::{Deserialize, Serialize};
 
@@ -35,6 +36,18 @@ fn program_file_name() -> String {
 }
 
 fn main() -> Result<(), ()> {
+    let args: Vec<String> = env::args().collect();
+    // human color provided by first argument, otherwise AI vs AI
+    let (log_enabled, log_level) = if args.len() > 1 {
+        match args[1].to_lowercase().as_str() {
+            "--quiet" | "-q" => (false, "debug"),
+            "--verbose" | "-v" => (true, "trace"),
+            _ => (true, "debug"),
+        }
+    } else {
+        (true, "debug")
+    };
+
     // let env = Env::default().filter_or("CRAB_CHESS", "info");
     // env_logger::init_from_env(env);
 
@@ -46,20 +59,22 @@ fn main() -> Result<(), ()> {
     // book_test();
     // return Ok(());
 
-    match flexi_logger::Logger::try_with_str("trace") {
-        Ok(my_logger) => {
-            my_logger
-                .log_to_file(
-                    flexi_logger::FileSpec::default()
-                        .directory("crab_logs") // create files in folder ./log_files
-                        .basename(program_file_name())
-                        // .discriminant("log") // use infix in log file name
-                        .suffix("log"), // use suffix .trc instead of .log
-                ) // write logs to file
-                .duplicate_to_stderr(flexi_logger::Duplicate::Info) // print info also to the console
-                .start();
+    if log_enabled {
+        match flexi_logger::Logger::try_with_str(log_level) {
+            Ok(my_logger) => {
+                my_logger
+                    .log_to_file(
+                        flexi_logger::FileSpec::default()
+                            .directory("crab_logs") // create files in folder ./log_files
+                            .basename(program_file_name())
+                            // .discriminant("log") // use infix in log file name
+                            .suffix("log"), // use suffix .trc instead of .log
+                    ) // write logs to file
+                    .duplicate_to_stderr(flexi_logger::Duplicate::Info) // print info also to the console
+                    .start();
+            }
+            Err(_) => {}
         }
-        Err(_) => {}
     }
 
     let mut input;
@@ -126,6 +141,7 @@ fn wait_for_uci() -> Result<(), ()> {
                 fen,
                 moves,
             } => {
+                // for mv in game.actions() {}
                 if startpos {
                     game = Game::new();
                 }

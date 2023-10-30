@@ -1,3 +1,4 @@
+use crate::precomputed;
 use chess::Color::{self, Black, White};
 use chess::Piece::{Bishop, King, Knight, Pawn, Queen, Rook};
 use chess::{BitBoard, Board, BoardStatus, ChessMove, Game, MoveGen, Piece, Square, ALL_PIECES};
@@ -8,6 +9,51 @@ use std::time::{Duration, Instant};
 
 const MAXIMUM_SEARCH_DEPTH: usize = 40; // search will NEVER exceed this depth
 const CHECK_MV_SEARCH_DEPTH: usize = 20; // search will only evaluate captures (not check) after this depth
+
+const STALEMATE_SCORE: i32 = 0;
+const CHECKMATE_SCORE: i32 = -999995;
+
+static DISTANCE_FROM_CENTER: [i32; 64] = [
+    6, 5, 4, 3, 3, 4, 5, 6, 5, 4, 3, 2, 2, 3, 4, 5, 4, 3, 2, 1, 1, 2, 3, 4, 3, 2, 1, 0, 0, 1, 2, 3,
+    3, 2, 1, 0, 0, 1, 2, 3, 4, 3, 2, 1, 1, 2, 3, 4, 5, 4, 3, 2, 2, 3, 4, 5, 6, 5, 4, 3, 3, 4, 5, 6,
+];
+
+static PAWN_PST_ENDGAME: [i32; 64] = [
+    0, 0, 0, 0, 0, 0, 0, 0, 80, 80, 80, 80, 80, 80, 80, 80, 50, 50, 50, 50, 50, 50, 50, 50, 30, 30,
+    30, 30, 30, 30, 30, 30, 20, 20, 20, 20, 20, 20, 20, 20, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10,
+    10, 10, 10, 10, 10, 10, 0, 0, 0, 0, 0, 0, 0, 0,
+];
+
+static PAWN_PST: [i32; 64] = [
+    0, 0, 0, 0, 0, 0, 0, 0, 78, 83, 86, 73, 102, 82, 85, 90, 7, 29, 21, 44, 40, 31, 44, 7, -18, 16,
+    -2, 15, 14, 0, 15, -13, -26, 3, 10, 9, 6, 1, 0, -23, -22, 9, 5, -11, -10, -2, 3, -19, -31, 8,
+    -7, -37, -36, -14, 3, -31, 0, 0, 0, 0, 0, 0, 0, 0,
+];
+static KNIGHT_PST: [i32; 64] = [
+    -66, -53, -75, -75, -10, -55, -58, -70, -3, -6, 100, -36, 4, 62, -4, -14, 10, 67, 1, 74, 73,
+    27, 62, -2, 24, 24, 45, 37, 33, 41, 25, 17, -1, 5, 31, 21, 22, 35, 2, 0, -18, 10, 13, 22, 18,
+    15, 11, -14, -23, -15, 2, 0, 2, 0, -23, -20, -74, -23, -26, -24, -19, -35, -22, -69,
+];
+static BISHOP_PST: [i32; 64] = [
+    -59, -78, -82, -76, -23, -107, -37, -50, -11, 20, 35, -42, -39, 31, 2, -22, -9, 39, -32, 41,
+    52, -10, 28, -14, 25, 17, 20, 34, 26, 25, 15, 10, 13, 10, 17, 23, 17, 16, 0, 7, 14, 25, 24, 15,
+    8, 25, 20, 15, 19, 20, 11, 6, 7, 6, 20, 16, -7, 2, -15, -12, -14, -15, -10, -10,
+];
+static ROOK_PST: [i32; 64] = [
+    35, 29, 33, 4, 37, 33, 56, 50, 55, 29, 56, 67, 55, 62, 34, 60, 19, 35, 28, 33, 45, 27, 25, 15,
+    0, 5, 16, 13, 18, -4, -9, -6, -28, -35, -16, -21, -13, -29, -46, -30, -42, -28, -42, -25, -25,
+    -35, -26, -46, -53, -38, -31, -26, -29, -43, -44, -53, -30, -24, -18, 5, -2, -18, -31, -32,
+];
+static QUEEN_PST: [i32; 64] = [
+    6, 1, -8, -104, 69, 24, 88, 26, 14, 32, 60, -10, 20, 76, 57, 24, -2, 43, 32, 60, 72, 63, 43, 2,
+    1, -16, 22, 17, 25, 20, -13, -6, -14, -15, -2, -5, -1, -10, -20, -22, -30, -6, -13, -11, -16,
+    -11, -16, -27, -36, -18, 0, -19, -15, -15, -21, -38, -39, -30, -31, -13, -31, -36, -34, -42,
+];
+static KING_PST: [i32; 64] = [
+    4, 54, 47, -99, -99, 60, 83, -62, -32, 10, 55, 56, 56, 55, 10, 3, -62, 12, -57, 44, -67, 28,
+    37, -31, -55, 50, 11, -4, -19, 13, 0, -49, -55, -43, -52, -28, -51, -47, -8, -50, -47, -42,
+    -43, -79, -64, -32, -29, -32, -4, 3, -14, -50, -57, -18, 13, 4, 17, 30, -3, -14, 6, -1, 40, 18,
+];
 
 #[derive(Clone, Copy, PartialEq, PartialOrd)]
 
@@ -47,6 +93,7 @@ pub struct SearchStats {
     tt_exact_hits: i32,
     tt_lower_hits: i32,
     depth_reduction_misses: i32,
+    depth_reduction_hits: i32,
     max_ply: usize,
 }
 
@@ -61,6 +108,7 @@ impl std::ops::AddAssign for SearchStats {
         self.tt_exact_hits += other.tt_exact_hits;
         self.tt_lower_hits += other.tt_lower_hits;
         self.depth_reduction_misses += other.depth_reduction_misses;
+        self.depth_reduction_hits += other.depth_reduction_hits;
         self.max_ply = self.max_ply.max(other.max_ply); // set ply to max instead of adding
     }
 }
@@ -105,10 +153,6 @@ pub fn debug_pp() {
     println!("Created {} pawn masks in {:?}", count, start_time.elapsed())
 }
 
-fn adjacent_files_mask() {
-    // :/
-}
-
 fn passed_pawn_mask_from_square(pawn_square: Square, pawn_color: Color) -> u64 {
     // Check if there are no enemy pawns in the same file or adjacent files
     let file_index = pawn_square.get_file().to_index();
@@ -136,75 +180,18 @@ fn passed_pawn_mask_from_square(pawn_square: Square, pawn_color: Color) -> u64 {
 }
 
 pub struct EvaluatorBot2010 {
-    pawn_pst: Vec<i32>,
-    knight_pst: Vec<i32>,
-    bishop_pst: Vec<i32>,
-    rook_pst: Vec<i32>,
-    queen_pst: Vec<i32>,
-    king_pst: Vec<i32>,
-    pawn_w_pst: Vec<i32>,
-    knight_w_pst: Vec<i32>,
-    bishop_w_pst: Vec<i32>,
-    rook_w_pst: Vec<i32>,
-    queen_w_pst: Vec<i32>,
-    king_w_pst: Vec<i32>,
     piece_values: HashMap<Piece, i32>,
     transposition_table: TranspositionTable,
     trans_table_depth_threshold: usize,
     search_stats: SearchStats,
+    cum_search_stats: SearchStats,
+    current_search_depth: usize,
 }
 
 impl EvaluatorBot2010 {
     pub fn new() -> EvaluatorBot2010 {
-        let pawn_pst = vec![
-            0, 0, 0, 0, 0, 0, 0, 0, 278, 283, 286, 273, 302, 282, 285, 290, 107, 129, 121, 144,
-            140, 131, 144, 107, 2, 36, 18, 35, 34, 20, 35, 7, -26, 3, 10, 9, 6, 1, 0, -23, -22, 9,
-            5, -11, -10, -2, 3, -19, -31, 8, -7, -37, -36, -14, 3, -31, 0, 0, 0, 0, 0, 0, 0, 0,
-        ];
-        let knight_pst = vec![
-            -66, -53, -75, -75, -10, -55, -58, -70, -3, -6, 100, -36, 4, 62, -4, -14, 10, 67, 1,
-            74, 73, 27, 62, -2, 24, 24, 45, 37, 33, 41, 25, 17, -1, 5, 31, 21, 22, 35, 2, 0, -18,
-            10, 13, 22, 18, 15, 11, -14, -23, -15, 2, 0, 2, 0, -23, -20, -74, -23, -26, -24, -19,
-            -35, -22, -69,
-        ];
-        let bishop_pst = vec![
-            -59, -78, -82, -76, -23, -107, -37, -50, -11, 20, 35, -42, -39, 31, 2, -22, -9, 39,
-            -32, 41, 52, -10, 28, -14, 25, 17, 20, 34, 26, 25, 15, 10, 13, 10, 17, 23, 17, 16, 0,
-            7, 14, 25, 24, 15, 8, 25, 20, 15, 19, 20, 11, 6, 7, 6, 20, 16, -7, 2, -15, -12, -14,
-            -15, -10, -10,
-        ];
-        let rook_pst = vec![
-            35, 29, 33, 4, 37, 33, 56, 50, 55, 29, 56, 67, 55, 62, 34, 60, 19, 35, 28, 33, 45, 27,
-            25, 15, 0, 5, 16, 13, 18, -4, -9, -6, -28, -35, -16, -21, -13, -29, -46, -30, -42, -28,
-            -42, -25, -25, -35, -26, -46, -53, -38, -31, -26, -29, -43, -44, -53, -30, -24, -18, 5,
-            -2, -18, -31, -32,
-        ];
-        let queen_pst = vec![
-            6, 1, -8, -104, 69, 24, 88, 26, 14, 32, 60, -10, 20, 76, 57, 24, -2, 43, 32, 60, 72,
-            63, 43, 2, 1, -16, 22, 17, 25, 20, -13, -6, -14, -15, -2, -5, -1, -10, -20, -22, -30,
-            -6, -13, -11, -16, -11, -16, -27, -36, -18, 0, -19, -15, -15, -21, -38, -39, -30, -31,
-            -13, -31, -36, -34, -42,
-        ];
-        let king_pst = vec![
-            4, 54, 47, -99, -99, 60, 83, -62, -32, 10, 55, 56, 56, 55, 10, 3, -62, 12, -57, 44,
-            -67, 28, 37, -31, -55, 50, 11, -4, -19, 13, 0, -49, -55, -43, -52, -28, -51, -47, -8,
-            -50, -47, -42, -43, -79, -64, -32, -29, -32, -4, 3, -14, -50, -57, -18, 13, 4, 17, 30,
-            -3, -14, 6, -1, 40, 18,
-        ];
         EvaluatorBot2010 {
             // board: Board::default(),
-            pawn_pst: pawn_pst.to_vec(),
-            knight_pst: knight_pst.to_vec(),
-            bishop_pst: bishop_pst.to_vec(),
-            rook_pst: rook_pst.to_vec(),
-            queen_pst: queen_pst.to_vec(),
-            king_pst: king_pst.to_vec(),
-            pawn_w_pst: pawn_pst.iter().copied().rev().collect(),
-            knight_w_pst: knight_pst.iter().copied().rev().collect(),
-            bishop_w_pst: bishop_pst.iter().copied().rev().collect(),
-            rook_w_pst: rook_pst.iter().copied().rev().collect(),
-            queen_w_pst: queen_pst.iter().copied().rev().collect(),
-            king_w_pst: king_pst.iter().copied().rev().collect(),
             piece_values: [
                 (Pawn, 100),
                 (Knight, 330),
@@ -219,6 +206,8 @@ impl EvaluatorBot2010 {
             transposition_table: TranspositionTable::new(),
             trans_table_depth_threshold: 2,
             search_stats: SearchStats::default(),
+            cum_search_stats: SearchStats::default(),
+            current_search_depth: 0,
         }
     }
 
@@ -277,7 +266,13 @@ impl EvaluatorBot2010 {
         // }
     }
 
-    fn pawn_bonus_value(&self, square: Square, pawn_color: Color, enemy_pawns: &BitBoard) -> i32 {
+    fn pawn_bonus_value(
+        &self,
+        square: Square,
+        pawn_color: Color,
+        enemy_pawns: &BitBoard,
+        friendly_pawns: &BitBoard,
+    ) -> i32 {
         let mut bonus_value = 0;
         // passed pawns are good, even better with less material on the board
         // only look for passed pawns after the opponent has lost 6 pieces
@@ -299,47 +294,135 @@ impl EvaluatorBot2010 {
                 _ => 15,
             };
         };
+
+        // let's do some bitboard stuff to figure out if this pawn is supported
+
+        let file_index = square.get_file().to_index();
+        let file_a = 0x0101010101010101u64;
+        let file_mask_center = file_a << file_index;
+        let file_mask_left = file_a << (file_index).max(1) - 1;
+        let file_mask_right = file_a << (file_index + 1).min(7);
+
+        let mut bonus = 0;
+
+        // if more than one friendly pawn is in the same file, that's not ideal
+        bonus += match (friendly_pawns & BitBoard::new(file_mask_center)).popcnt() {
+            // this bonus will be applied to each pawn
+            0 | 1 => 0,
+            2 => -10,
+            3 => -20,
+            _ => -30,
+        };
+        // if a pawn is isolated, that's not ideal
+        bonus += match (friendly_pawns & BitBoard::new(file_mask_left | file_mask_right)).popcnt() {
+            0 => -15,
+            1 => -5,
+            2 => 4,
+            _ => 8,
+        };
         return bonus_value as i32;
+    }
+
+    fn interpolated_pawn_pst(&self, endgame_factor: u32, color_specific_index: usize) -> i32 {
+        // endgame factor is from 0 to 6
+        match endgame_factor {
+            0 => PAWN_PST[color_specific_index],
+            1..=5 => {
+                (((6 - endgame_factor) as i32 * PAWN_PST[color_specific_index]) as i32
+                    + (endgame_factor as i32 * PAWN_PST_ENDGAME[color_specific_index]) as i32)
+                    / 6
+            }
+            6 => PAWN_PST_ENDGAME[color_specific_index],
+            _ => {
+                panic!("endgame factor out of range")
+            }
+        }
+    }
+
+    fn endgame_king_modifier(&self, king_square: Square, endgame_factor: u32) -> i32 {
+        // being near the center is good
+        // being away from the center is bad
+        // endgame_factor is between 0 and 6
+        if endgame_factor == 0 {
+            return 0;
+        }
+        (3 - DISTANCE_FROM_CENTER[king_square.to_index()]) * endgame_factor as i32
     }
 
     fn evaluate_material(&self, board: &Board) -> i32 {
         // Returns a positive value if the player whose turn it is is winning
         let mut total_score: i32 = 0;
         // we'll use this bitboard to calculate pawn bonus value
-        let white_pawns = board.color_combined(Color::White) & board.pieces(Piece::Pawn);
-        let black_pawns = board.color_combined(Color::Black) & board.pieces(Piece::Pawn);
+        let white_pieces = board.color_combined(Color::White);
+        let black_pieces = board.color_combined(Color::Black);
+        let white_pawns = white_pieces & board.pieces(Piece::Pawn);
+        let black_pawns = black_pieces & board.pieces(Piece::Pawn);
+        let white_major_pieces = white_pieces & !white_pawns;
+        let black_major_pieces = black_pieces & !black_pawns;
+        let all_major_pieces = white_major_pieces | black_major_pieces;
+        let endgame_factor: u32 = 10 - all_major_pieces.popcnt().clamp(4, 10); // 0 to 6
+
         for piece in ALL_PIECES {
             for square in *board.pieces(piece) {
                 let index = square.to_index();
                 if board.color_on(square) == Some(White) {
                     total_score += match piece {
                         Pawn => {
-                            self.pawn_w_pst[index]
+                            self.interpolated_pawn_pst(endgame_factor, 63 - index)
                                 + 100
-                                + self.pawn_bonus_value(square, White, &black_pawns)
+                                + self.pawn_bonus_value(square, White, &black_pawns, &white_pawns)
                         }
-                        Knight => self.knight_w_pst[index] + 320,
-                        Bishop => self.bishop_w_pst[index] + 330,
-                        Rook => self.rook_w_pst[index] + 500,
-                        Queen => self.queen_w_pst[index] + 900,
-                        King => self.king_w_pst[index] + self.king_safety(board, square, White),
+                        Knight => KNIGHT_PST[63 - index] + 320,
+                        Bishop => BISHOP_PST[63 - index] + 330,
+                        Rook => ROOK_PST[63 - index] + 500,
+                        Queen => QUEEN_PST[63 - index] + 900,
+                        King => {
+                            KING_PST[63 - index]
+                                + self.king_safety(board, square, White)
+                                + self.endgame_king_modifier(square, endgame_factor)
+                        }
                     };
                 } else {
                     total_score -= match piece {
                         Pawn => {
-                            self.pawn_pst[index]
+                            self.interpolated_pawn_pst(endgame_factor, index)
                                 + 100
-                                + self.pawn_bonus_value(square, Black, &white_pawns)
+                                + self.pawn_bonus_value(square, Black, &white_pawns, &black_pawns)
                         }
-                        Knight => self.knight_pst[index] + 320,
-                        Bishop => self.bishop_pst[index] + 330,
-                        Rook => self.rook_pst[index] + 500,
-                        Queen => self.queen_pst[index] + 900,
-                        King => self.king_pst[index] + self.king_safety(board, square, Black),
+                        Knight => KNIGHT_PST[index] + 320,
+                        Bishop => BISHOP_PST[index] + 330,
+                        Rook => ROOK_PST[index] + 500,
+                        Queen => QUEEN_PST[index] + 900,
+                        King => {
+                            KING_PST[index]
+                                + self.king_safety(board, square, Black)
+                                + self.endgame_king_modifier(square, endgame_factor)
+                        }
                     };
                 }
             }
         }
+
+        if (white_pawns | black_pawns).popcnt() == 0 {
+            // Mop up when there are no pawns left
+            // it's good for the player who's winning if they get near the enemy king
+            let white_king = white_pieces & board.pieces(Piece::King);
+            let black_king = black_pieces & board.pieces(Piece::King);
+            let dist = precomputed::DISTANCE_BETWEEN_SQUARES[white_king.to_square().to_index()]
+                [black_king.to_square().to_index()];
+            // if this is good for white add score
+            // if this is good for black remove score
+            if total_score > 200 {
+                // white is winning
+                total_score += 5 * (10 - dist as i32);
+            } else if total_score < -200 {
+                // black is winning
+                total_score -= 5 * (10 - dist as i32);
+            } else {
+                // it's quite even?
+            };
+        };
+
         // also calculate mobility
         // actually this should be the *difference* in mobility
         // this overflows the stack
@@ -439,9 +522,9 @@ impl EvaluatorBot2010 {
         // if depth < 3 {
         //     panic!("depth must be >= 3");
         // }
-        let mut cum_search_stats = SearchStats::default();
         // iteratively search at multiple depths
         for n in 2.min(depth)..=depth {
+            self.current_search_depth = n;
             // TODO: do i need to .step_by(2)?
 
             // execute a top level search
@@ -459,15 +542,19 @@ impl EvaluatorBot2010 {
             println!(
                 "info depth {} seldepth {} score cp {} time {} pv {} {}",
                 n,
-                cum_search_stats.max_ply,
+                self.cum_search_stats.max_ply,
                 score,
                 start_time.elapsed().as_millis(),
                 chosen_move,
-                best_resp
+                if best_resp == ChessMove::new(Square::A1, Square::A1, None) {
+                    "".to_string()
+                } else {
+                    best_resp.to_string()
+                }
             );
             // trace!("TT Size is now {}", self.transposition_table.0.len());
             // add to cumulative search stats then clear search_stats for next time
-            cum_search_stats += self.search_stats;
+            self.cum_search_stats += self.search_stats;
             self.search_stats = SearchStats::default();
 
             // debug!("best response: {}", best_resp);
@@ -486,7 +573,7 @@ impl EvaluatorBot2010 {
             }
         }
         debug!("Cumulative search stats:");
-        debug!("{:?}", cum_search_stats);
+        debug!("{:?}", self.cum_search_stats);
         trace!("---- End search ----");
         trace!("");
         return (score, chosen_move);
@@ -505,28 +592,8 @@ impl EvaluatorBot2010 {
         // Search for the best move using alpha-beta pruning
         // assumes depth > 0
 
-        // TODO: EXPERIMENT - DO NOT GET TOP LEVEL SEARCH FROM TRANSPOSITION TABLE
-        // this is so that we can preserve move order, making iterative deepening viable
-        // match self.get_from_transposition_table(board.get_hash(), depth) {
-        //     Some(cache_info) => {
-        //         let (score, best_move) = cache_info;
-        //         // make sure that the move order we return has the best move first
-        //         // so that if we do another search we start with the best move
-        //         let mut new_moves = vec![(best_move, score)];
-        //         for entry in move_order.iter() {
-        //             if entry != &(best_move, score) {
-        //                 new_moves.push(*entry)
-        //             }
-        //         }
-        //         // if let Some(mv_index) = move_order.iter().position(|x| *x == (best_move, score)) {
-        //         //     move_order.remove(mv_index);
-        //         //     move_order.insert(0, (best_move, score));
-        //         // }
-        //         let response_unavailable = ChessMove::new(Square::A2, Square::A2, None);
-        //         return (score, best_move, new_moves, response_unavailable);
-        //     }
-        //     None => (),
-        // }
+        // Do not get top level search from transposition table!
+        // this is so that we can order all the moves, making iterative deepening blazing fast
 
         let mut best_move = ChessMove::new(Square::A1, Square::A1, None); // default;
         let mut best_response = ChessMove::new(Square::A1, Square::A1, None);
@@ -545,6 +612,11 @@ impl EvaluatorBot2010 {
             .progress_chars("##-"),
         );
         for (mv_index, (mv, _)) in move_order.iter().enumerate() {
+            // TODO: try using seen_positions instead of cloning game
+            // i think it will be faster
+            // at the top level here's where we first create seen_positions
+            // let mut seen_positions: HashMap<u64, u32> = HashMap::new();
+            // *seen_positions.entry(board.get_hash()).or_insert(0) += 1;
             // search extensions! look deeper for capture moves
             bar.inc(1);
             // if depth > 5 {
@@ -559,44 +631,64 @@ impl EvaluatorBot2010 {
                 alpha -= 1; // so that if mate in 2 is 9998 then mate in 3 is 9997
 
                 // search capture moves deeper
-                let more_depth = if board.piece_on(mv.get_dest()).is_some() {
+                let mut depth_modifier: i32 = if board.piece_on(mv.get_dest()).is_some() {
                     1
                 } else {
                     0
                 };
 
                 // first few moves are full depth, but search remaining non-capture moves at shallower depth
-                let depth_reduction;
                 // no depth reduction when depth <= 3
                 // will enable better ordered moves during later searches
-                if more_depth == 0
-                    && depth > 3
-                    && mv_index >= 3
-                    && board.piece_on(mv.get_dest()).is_none()
-                {
-                    depth_reduction = 1;
-                } else {
-                    depth_reduction = 0;
+                if depth_modifier <= 0 && depth > 3 && mv_index >= 3 {
+                    // we won't reduce depth of capture moves
+                    // because depth modifier is already below 0
+                    depth_modifier -= 1;
+                    if mv_index >= 8 && depth > 4 {
+                        // even later moves are even more reduced
+                        depth_modifier -= 1;
+                    }
                 };
-                // perform a possibly shallower search
-                let (mut move_search_score, mut best_response_mv) = self.search(
-                    &nboard,
-                    &hgame,
-                    (depth - 1 - depth_reduction).max(0),
-                    1,
-                    -beta,
-                    -alpha,
-                    kill_time,
-                    Some(vec![best_response]),
-                );
-                if depth_reduction > 0 && -move_search_score > alpha {
-                    // perform a full search to get a more accurate result, make sure
-                    // that this great looking position really is great looking
-                    self.search_stats.depth_reduction_misses += 1;
+                let mut needs_full_search = true;
+                let mut move_search_score = 10101010; // this is ALWAYS overwritten
+                let mut best_response_mv = default_move; // this is ALWAYS overwritten
+                                                         // but if i don't initialize them the compiler has a fit
+
+                // Removed all search depth reductions
+                // as they seemed to do more harm than good
+                //
+                // if depth_modifier < 0 {
+                //     // perform a shallower search that we will need to redo
+                //     // if the result is above alpha
+                //     (move_search_score, best_response_mv) = self.search(
+                //         &nboard,
+                //         &hgame,
+                //         (depth as i32 + depth_modifier - 1).max(0) as usize,
+                //         1,
+                //         -beta,
+                //         -alpha,
+                //         kill_time,
+                //         Some(vec![best_response]),
+                //     );
+                //     if -move_search_score <= alpha {
+                //         // no need to do a full search
+                //         self.search_stats.depth_reduction_hits += 1;
+                //         needs_full_search = false;
+                //     }
+                // }
+
+                if needs_full_search {
+                    if depth_modifier < 0 {
+                        // we already tried a shallow search but now need to
+                        // perform a full search to get a more accurate result, make sure
+                        // that this great looking position really is great looking
+                        depth_modifier = 0;
+                        // self.search_stats.depth_reduction_misses += 1;
+                    };
                     (move_search_score, best_response_mv) = self.search(
                         &nboard,
                         &hgame,
-                        depth + more_depth - 1,
+                        depth + depth_modifier as usize - 1,
                         1,
                         -beta,
                         -alpha,
@@ -664,7 +756,7 @@ impl EvaluatorBot2010 {
             if alpha > -900000 {
                 if *val < -900000 {
                     // ignore losing moves in future searches
-                    debug!("Avoiding a losing move - {}", mv.to_string());
+                    // trace!("Avoiding a losing move - {}", mv.to_string());
                     continue;
                 }
             }
@@ -707,7 +799,7 @@ impl EvaluatorBot2010 {
         let default_move = ChessMove::new(Square::A1, Square::A1, None);
 
         if game.can_declare_draw() || board.status() == BoardStatus::Stalemate {
-            return (0, default_move);
+            return (STALEMATE_SCORE, default_move);
         }
 
         // trace!("search board {} is {:?}", board.to_string(), board.status());
@@ -720,15 +812,7 @@ impl EvaluatorBot2010 {
             //     beta
             // );
 
-            return (i32::from(-999995), default_move);
-        }
-        if depth == 0 {
-            // assumes depth > 0 when this fn is called for the first time
-            // otherwise it will return default_move
-            return (
-                self.search_only_captures(board, game, ply + 1, alpha, beta),
-                default_move,
-            );
+            return (CHECKMATE_SCORE, default_move);
         }
 
         let mut best_move: ChessMove = default_move;
@@ -763,6 +847,15 @@ impl EvaluatorBot2010 {
             }
         }
 
+        if depth == 0 {
+            // assumes depth > 0 when this fn is called for the first time
+            // otherwise it will return default_move
+            return (
+                self.search_only_captures(board, game, ply + 1, alpha, beta, kill_time, None),
+                default_move,
+            );
+        }
+
         // for future transposition table
         let mut this_node_type = NodeType::UpperBound;
 
@@ -770,23 +863,22 @@ impl EvaluatorBot2010 {
         let mut best_response: ChessMove = default_move;
         for (mv, _) in self.get_moves_lazily_ordered(board, movegen, suggested_moves) {
             let nboard = board.make_move_new(mv);
+            // let mut new_seen_positions: HashMap<u64, u32> = seen_positions.clone();
+            // *new_seen_positions.entry(board.get_hash()).or_insert(0) += 1;
             // the only way i could find to detect draws
             // make a new game, make the move, then check
             let mut hyp_game = game.clone();
             hyp_game.make_move(mv);
-            let (move_search_score, sub_response) = match hyp_game.can_declare_draw() {
-                true => return (0, default_move),
-                false => self.search(
-                    &nboard,
-                    &hyp_game,
-                    depth - 1,
-                    ply + 1,
-                    -beta,
-                    -alpha,
-                    kill_time,
-                    Some(vec![best_response]),
-                ),
-            };
+            let (move_search_score, sub_response) = self.search(
+                &nboard,
+                &hyp_game,
+                depth - 1,
+                ply + 1,
+                -beta,
+                -alpha,
+                kill_time,
+                Some(vec![best_response]),
+            );
             // we don't have all the nodes on this tree yet
 
             // reduce checkmate moves in subsearches so that sooner mates are more valuable
@@ -870,6 +962,8 @@ impl EvaluatorBot2010 {
         ply: usize,
         mut alpha: i32,
         beta: i32,
+        kill_time: Instant,
+        seen_positions: Option<HashMap<u64, u32>>,
     ) -> i32 {
         if ply > self.search_stats.max_ply {
             self.search_stats.max_ply = ply
@@ -884,9 +978,9 @@ impl EvaluatorBot2010 {
                 //     "found checkmate for {:?} in search_only_captures",
                 //     board.side_to_move()
                 // );
-                return i32::from(-999995);
+                return CHECKMATE_SCORE;
             } else if board.status() == BoardStatus::Stalemate {
-                return i32::from(0);
+                return STALEMATE_SCORE;
             }
             // no attacking moves -> evaluate the board
         }
@@ -902,17 +996,19 @@ impl EvaluatorBot2010 {
             alpha = evaluation;
         }
         // if we're in too deep, bail out
-        if ply >= MAXIMUM_SEARCH_DEPTH {
-            debug!("Bailing out at max search depth {}", ply);
+        if ply >= (2 + self.current_search_depth * 6).min(MAXIMUM_SEARCH_DEPTH) {
+            // debug!("Bailing out at max search depth {}", ply);
             return evaluation;
         }
         // first look through attacking moves
         // for (mv, _) in self.get_moves_lazily_ordered(board, movegen) {
         let mut best_eval = -99999999;
         for mv in &mut movegen {
+            // clear out seen_positions after capture moves
+            // capture moves change everything such that the old positions are all useless, right?
             let nboard = board.make_move_new(mv);
             let move_search_score =
-                self.search_only_captures(&nboard, game, ply + 1, -beta, -alpha);
+                self.search_only_captures(&nboard, game, ply + 1, -beta, -alpha, kill_time, None);
             let score = -move_search_score;
             self.search_stats.nodes_searched += 1;
             if score >= beta {
@@ -930,10 +1026,16 @@ impl EvaluatorBot2010 {
         }
         // then look through other moves
         // unless we're too deep
-        if ply >= CHECK_MV_SEARCH_DEPTH {
-            debug!("Ignoring checks after check move search depth {}", ply);
+        // this can be quite common because of a lack of repetition detection
+        // limiting by current search depth keeps us from spiraling into
+        // infinity during low depth searches
+        if ply >= (self.current_search_depth * 5).min(CHECK_MV_SEARCH_DEPTH) {
+            // debug!("Ignoring checks after check move search depth {}", ply);
+
+            // trace!("seen_positions: {:?}", seen_positions);
             return best_eval.max(evaluation);
         }
+
         movegen.set_iterator_mask(!chess::EMPTY);
         for (mv, _) in self.get_moves_lazily_ordered(board, movegen, None) {
             // we only want to continue evaluating if EITHER of these conditions is true
@@ -950,8 +1052,37 @@ impl EvaluatorBot2010 {
             }
             // keep searching deeper
             let score;
-            let move_search_score =
-                self.search_only_captures(&nboard, game, ply + 1, -beta, -alpha);
+
+            // search for repetition
+            // it is too expensive to copy the whole game object
+            // so we keep this map of board hashes to the number of times we've seen them
+            // if we see the same board three times it's a draw by repetition
+            let mut new_seen_positions = match seen_positions.clone() {
+                Some(pos_map) => pos_map,
+                None => HashMap::new(),
+            };
+            match new_seen_positions.get_mut(&board.get_hash()) {
+                Some(val) => {
+                    *val += 1;
+                    if *val >= 3 {
+                        trace!("identified draw from repetition in subsearch");
+                        return STALEMATE_SCORE;
+                    }
+                }
+                None => {
+                    new_seen_positions.insert(board.get_hash(), 1);
+                }
+            }
+
+            let move_search_score = self.search_only_captures(
+                &nboard,
+                game,
+                ply + 1,
+                -beta,
+                -alpha,
+                kill_time,
+                Some(new_seen_positions),
+            );
             score = -move_search_score;
             self.search_stats.nodes_searched += 1;
             if score >= beta {
