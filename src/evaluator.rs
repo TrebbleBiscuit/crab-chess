@@ -5,7 +5,6 @@ use chess::{BitBoard, Board, BoardStatus, ChessMove, Game, MoveGen, Piece, Squar
 use indicatif::{ProgressBar, ProgressStyle};
 use log::{debug, info, trace};
 use std::collections::HashMap;
-use std::default;
 use std::time::{Duration, Instant};
 
 const MAXIMUM_SEARCH_DEPTH: usize = 40; // search will NEVER exceed this depth
@@ -14,7 +13,6 @@ const CHECK_MV_SEARCH_DEPTH: usize = 20; // search will only evaluate captures (
 const STALEMATE_SCORE: i32 = 0;
 const CHECKMATE_SCORE: i32 = -999995;
 
-const FILE_A_MASK: u64 = 0x0101010101010101u64;
 const FILE_MASKS: [u64; 8] = [
     0x101010101010101,
     0x202020202020202,
@@ -155,19 +153,6 @@ impl TranspositionTable {
     }
 }
 
-pub fn debug_pp() {
-    let start_time = Instant::now();
-    let mut count = 0;
-    for n in 0..10000000 {
-        for square in BitBoard::new(u64::MAX) {
-            passed_pawn_mask_from_square(square, White);
-            passed_pawn_mask_from_square(square, Black);
-            count += 2;
-        }
-    }
-    println!("Created {} pawn masks in {:?}", count, start_time.elapsed())
-}
-
 fn passed_pawn_mask_from_square(pawn_square: Square, pawn_color: Color) -> u64 {
     // Check if there are no enemy pawns in the same file or adjacent files
     let file_index = pawn_square.get_file().to_index();
@@ -177,11 +162,11 @@ fn passed_pawn_mask_from_square(pawn_square: Square, pawn_color: Color) -> u64 {
     let rank_index = pawn_square.get_rank().to_index();
     match pawn_color {
         White => {
-            let rank_mask_above = u64::MAX << 8 * (7 - rank_index);
+            let rank_mask_above = u64::MAX << (8 * (7 - rank_index));
             rank_mask_above & total_file_mask
         }
         Black => {
-            let rank_mask_below = u64::MAX >> 8 * (8 - rank_index);
+            let rank_mask_below = u64::MAX >> (8 * (8 - rank_index));
             rank_mask_below & total_file_mask
         }
     }
@@ -228,7 +213,7 @@ impl EvaluatorBot2010 {
         let enemy_pieces_remaining = board.color_combined(!king_color).popcnt();
         // safety is multiplied by the clamped # of enemy pieces remaining
         // more threats around means safety is more important
-        let safety_factor = (enemy_pieces_remaining.clamp(5, 15) - 5); // 0 to 10
+        let safety_factor = enemy_pieces_remaining.clamp(5, 15) - 5; // 0 to 10
 
         if safety_factor == 0 {
             return 0;
@@ -284,9 +269,9 @@ impl EvaluatorBot2010 {
         // let's do some bitboard stuff to figure out if this pawn is supported
 
         let file_index = square.get_file().to_index();
-        let file_mask_center = FILE_A_MASK << file_index;
-        let file_mask_left = FILE_A_MASK << ((file_index).max(1) - 1);
-        let file_mask_right = FILE_A_MASK << (file_index + 1).min(7);
+        let file_mask_center = FILE_MASKS[file_index];
+        let file_mask_left = FILE_MASKS[(file_index).max(1) - 1];
+        let file_mask_right = FILE_MASKS[(file_index + 1).min(7)];
 
         // if more than one friendly pawn is in the same file, that's not ideal
         bonus_value += match (friendly_pawns & BitBoard::new(file_mask_center)).popcnt() {
@@ -315,9 +300,7 @@ impl EvaluatorBot2010 {
                     / 6
             }
             6 => PAWN_PST_ENDGAME[color_specific_index],
-            _ => {
-                panic!("endgame factor out of range")
-            }
+            _ => unreachable!(),
         }
     }
 
@@ -505,7 +488,7 @@ impl EvaluatorBot2010 {
         let mut move_order: Vec<(ChessMove, i32)> = Vec::new();
         let movegen: MoveGen = MoveGen::new_legal(&board);
         let mut chosen_move: ChessMove = ChessMove::new(Square::A1, Square::A1, None);
-        let mut best_resp: ChessMove = ChessMove::new(Square::A1, Square::A1, None);
+        let mut best_resp;
 
         trace!("---- start search ----");
         debug!("Selecting a move from position {}", board.to_string());
@@ -759,7 +742,7 @@ impl EvaluatorBot2010 {
         for (i, (mv, val)) in move_values.iter().enumerate() {
             // pruning these moves may be covering the root of the problem
             // but i can't imagine this doing anything but helping so
-            if alpha > -900000 && *val < -900000 {
+            if i > 0 && alpha > -900000 && *val < -900000 {
                 // ignore losing moves in future searches
                 // trace!("Avoiding a losing move - {}", mv.to_string());
                 continue;
@@ -773,11 +756,11 @@ impl EvaluatorBot2010 {
             self.transposition_table.insert(
                 board.get_hash(),
                 Transposition {
-                    depth: depth,
+                    depth,
                     ply: 0,
                     score: alpha,
                     node_type: NodeType::Exact,
-                    best_move: best_move,
+                    best_move,
                 },
             );
         }
@@ -954,11 +937,11 @@ impl EvaluatorBot2010 {
                 _ => self.transposition_table.insert(
                     board.get_hash(),
                     Transposition {
-                        depth: depth,
-                        ply: ply,
+                        depth,
+                        ply,
                         score: best_score,
                         node_type: this_node_type,
-                        best_move: best_move,
+                        best_move,
                     },
                 ),
             }

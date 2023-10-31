@@ -60,20 +60,25 @@ fn main() -> Result<(), ()> {
     // return Ok(());
 
     if log_enabled {
-        match flexi_logger::Logger::try_with_str(log_level) {
-            Ok(my_logger) => {
-                my_logger
-                    .log_to_file(
-                        flexi_logger::FileSpec::default()
-                            .directory("crab_logs") // create files in folder ./log_files
-                            .basename(program_file_name())
-                            // .discriminant("log") // use infix in log file name
-                            .suffix("log"), // use suffix .trc instead of .log
-                    ) // write logs to file
-                    .duplicate_to_stderr(flexi_logger::Duplicate::Info) // print info also to the console
-                    .start();
-            }
-            Err(_) => {}
+        // log to file and also to stdout
+        if let Ok(my_logger) = flexi_logger::Logger::try_with_str(log_level) {
+            match my_logger
+                .log_to_file(
+                    flexi_logger::FileSpec::default()
+                        .directory("crab_logs") // create files in this folder
+                        .basename(program_file_name())
+                        // .discriminant("log") // use in log file name
+                        .suffix("log"),
+                )
+                .duplicate_to_stderr(flexi_logger::Duplicate::Info)
+                .start()
+            {
+                Ok(x) => x,
+                Err(y) => {
+                    error!("{:?}", y);
+                    panic!("couldn't set up logger! try --quiet")
+                }
+            };
         }
     }
 
@@ -93,7 +98,6 @@ fn main() -> Result<(), ()> {
             "crab" => {
                 bot_vs_bot();
             }
-            "testpp" => evaluator::debug_pp(),
             _ => {
                 println!("Unknown command. Try `uci`");
             }
@@ -111,7 +115,6 @@ fn main() -> Result<(), ()> {
 }
 
 fn wait_for_uci() -> Result<(), ()> {
-    let mut uci_ok: bool = false;
     let mut game = Game::new();
     let mut evaluator = EvaluatorBot2010::new();
     let move_depth = 9;
@@ -126,7 +129,6 @@ fn wait_for_uci() -> Result<(), ()> {
         match msg {
             UciMessage::Uci => {
                 // Initialize the UCI mode of the chess engine.
-                uci_ok = true;
                 println!("uciok")
             }
             UciMessage::UciNewGame => {
@@ -210,13 +212,13 @@ fn wait_for_uci() -> Result<(), ()> {
                     }
                 }
 
-                let (value, mv) = evaluator.iterative_search_deepening(
+                let (_value, mv) = evaluator.iterative_search_deepening(
                     &game.current_position(),
                     &game,
                     move_depth,
                     Duration::from_millis(think_time as u64),
                 );
-                println!("bestmove {}", mv.to_string());
+                println!("bestmove {mv}");
                 game.make_move(mv);
 
                 // singleplayer
@@ -275,7 +277,7 @@ fn play_speval() {
         );
         let to_move = board.side_to_move();
         info!("Move {} - {:?} to move", game.actions().len() + 1, to_move);
-        if !game.result().is_none() {
+        if game.result().is_some() {
             info!("Game Over");
             break;
         } else if game.can_declare_draw() {
@@ -303,7 +305,7 @@ fn play_speval() {
         if player_color != to_move.to_index() {
             // AI's turn
             let mv = sp_evaluator.top_level_search(&board, move_depth, Duration::from_secs(1));
-            info!("{:?} AI Move: {}", to_move, mv.to_string());
+            info!("{:?} AI Move: {}", to_move, mv);
             game.make_move(mv);
         } else {
             // Human's turn
@@ -357,7 +359,7 @@ fn bot_vs_bot() {
         match to_move {
             White => {
                 let mv = white_evaluator.top_level_search(&board, 5, move_duration);
-                info!("{:?} AI Move: {}", to_move, mv.to_string());
+                info!("{:?} AI Move: {}", to_move, mv);
                 game.make_move(mv);
             }
             Black => {
@@ -367,7 +369,7 @@ fn bot_vs_bot() {
                     move_depth,
                     move_duration,
                 );
-                info!("{:?} AI Move: {} @ {}", to_move, mv.to_string(), value);
+                info!("{:?} AI Move: {} @ {}", to_move, mv, value);
                 game.make_move(mv);
             }
         }
@@ -431,7 +433,7 @@ fn play_evaluator_bot_2010() {
                 move_depth,
                 Duration::new(1, 0),
             );
-            info!("{:?} AI Move: {} @ {}", to_move, mv.to_string(), value);
+            info!("{:?} AI Move: {} @ {}", to_move, mv, value);
             game.make_move(mv);
         } else {
             // Human's turn

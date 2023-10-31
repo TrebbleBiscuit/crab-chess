@@ -1,4 +1,8 @@
 
+### 0.0.14-rc9
+
+- More array lookups instead of calculations
+
 ### 0.0.14-rc8
 
 - seen_positions is now a slice

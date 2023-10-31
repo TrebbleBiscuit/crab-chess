@@ -35,7 +35,7 @@ impl SinglePlayerEvaluator {
             "Couldn't find a path to checkmate! Selecting a random move. - {:?}",
             start_time.elapsed()
         );
-        let move_gen = MoveGen::new_legal(&board);
+        let move_gen = MoveGen::new_legal(board);
         return move_gen
             .into_iter()
             .choose(&mut rand::thread_rng())
@@ -51,7 +51,7 @@ impl SinglePlayerEvaluator {
             return None;
         }
         // it's our turn, look through all legal moves
-        let legal_moves = MoveGen::new_legal(&board);
+        let legal_moves = MoveGen::new_legal(board);
         let num_legal_moves = legal_moves.len();
         // in random order to spice it up
         let mut legal_moves_vec = legal_moves
@@ -81,7 +81,7 @@ impl SinglePlayerEvaluator {
                 }
             };
             let future_result = self.search(&new_board, depth - 1, kill_time);
-            if let Some(_) = future_result {
+            if future_result.is_some() {
                 // found a checkmate in our deeper search
                 return Some(possible_move);
             }
