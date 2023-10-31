@@ -18,7 +18,44 @@ fn calculate_distance_between_squares() -> [[u32; 64]; 64] {
     distances
 }
 
-pub static DISTANCE_BETWEEN_SQUARES: [[u32; 64]; 64] = [
+fn gen_file_masks() -> [u64; 8] {
+    let file_a_mask = 0x0101010101010101u64;
+    let mut file_masks: [u64; 8] = [0; 8];
+    for n in 0..8 {
+        file_masks[n] = file_a_mask << n
+    }
+    file_masks
+}
+// println!("{:#02x?}", gen_file_masks());
+
+fn gen_triple_file_masks() -> [u64; 8] {
+    let file_masks = gen_file_masks();
+
+    let mut new_file_masks = [0; 8];
+    for file_index in 0..8 {
+        let file_mask_center = file_masks[file_index];
+        let file_mask_left = file_masks[file_index.max(1) - 1];
+        let file_mask_right = file_masks[(file_index + 1).min(7)];
+        let total_file_mask = file_mask_center | file_mask_left | file_mask_right;
+        new_file_masks[file_index] = total_file_mask;
+    }
+
+    return new_file_masks;
+}
+// println!("{:#02x?}", gen_triple_file_masks());
+
+pub const TRIPLE_FILE_MASKS: [u64; 8] = [
+    0x303030303030303,
+    0x707070707070707,
+    0xe0e0e0e0e0e0e0e,
+    0x1c1c1c1c1c1c1c1c,
+    0x3838383838383838,
+    0x7070707070707070,
+    0xe0e0e0e0e0e0e0e0,
+    0xc0c0c0c0c0c0c0c0,
+];
+
+pub const DISTANCE_BETWEEN_SQUARES: [[u32; 64]; 64] = [
     [
         0, 1, 2, 3, 4, 5, 6, 7, 1, 1, 2, 3, 4, 5, 6, 7, 2, 2, 3, 4, 4, 5, 6, 7, 3, 3, 4, 4, 5, 6,
         7, 8, 4, 4, 4, 5, 6, 6, 7, 8, 5, 5, 5, 6, 6, 7, 8, 9, 6, 6, 6, 7, 7, 8, 8, 9, 7, 7, 7, 8,

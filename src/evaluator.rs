@@ -15,6 +15,20 @@ const STALEMATE_SCORE: i32 = 0;
 const CHECKMATE_SCORE: i32 = -999995;
 
 const FILE_A_MASK: u64 = 0x0101010101010101u64;
+const FILE_MASKS: [u64; 8] = [
+    0x101010101010101,
+    0x202020202020202,
+    0x404040404040404,
+    0x808080808080808,
+    0x1010101010101010,
+    0x2020202020202020,
+    0x4040404040404040,
+    0x8080808080808080,
+];
+
+// passed pawn bonus depends on number of squares to promotion
+const PASSED_PAWN_BONUS: [i32; 8] = [0, 150, 90, 50, 20, 15, 15, 15];
+
 const DISTANCE_FROM_CENTER: [i32; 64] = [
     6, 5, 4, 3, 3, 4, 5, 6, 5, 4, 3, 2, 2, 3, 4, 5, 4, 3, 2, 1, 1, 2, 3, 4, 3, 2, 1, 0, 0, 1, 2, 3,
     3, 2, 1, 0, 0, 1, 2, 3, 4, 3, 2, 1, 1, 2, 3, 4, 5, 4, 3, 2, 2, 3, 4, 5, 6, 5, 4, 3, 3, 4, 5, 6,
@@ -157,16 +171,11 @@ pub fn debug_pp() {
 fn passed_pawn_mask_from_square(pawn_square: Square, pawn_color: Color) -> u64 {
     // Check if there are no enemy pawns in the same file or adjacent files
     let file_index = pawn_square.get_file().to_index();
-
-    // Generate masks for the 2-3 columns adjacent to the pawn
-    let file_mask_center = FILE_A_MASK << file_index;
-    let file_mask_left = FILE_A_MASK << (file_index).max(1) - 1;
-    let file_mask_right = FILE_A_MASK << (file_index + 1).min(7);
-    let total_file_mask = file_mask_center | file_mask_left | file_mask_right;
+    let total_file_mask = precomputed::TRIPLE_FILE_MASKS[file_index];
 
     // Generate masks for the rows below or above the pawn
     let rank_index = pawn_square.get_rank().to_index();
-    let passed_pawn_mask = match pawn_color {
+    match pawn_color {
         White => {
             let rank_mask_above = u64::MAX << 8 * (7 - rank_index);
             rank_mask_above & total_file_mask
@@ -175,8 +184,7 @@ fn passed_pawn_mask_from_square(pawn_square: Square, pawn_color: Color) -> u64 {
             let rank_mask_below = u64::MAX >> 8 * (8 - rank_index);
             rank_mask_below & total_file_mask
         }
-    };
-    passed_pawn_mask
+    }
 }
 
 pub struct EvaluatorBot2010 {
@@ -248,22 +256,6 @@ impl EvaluatorBot2010 {
         // If an enemy pawn is not in the passed pawn mask, it is indeed a passed pawn
         let passed_pawn_mask = passed_pawn_mask_from_square(pawn_square, pawn_color);
         (enemy_pawns.0 & passed_pawn_mask) == 0
-
-        // debug messages
-        // if pawn_square == Square::F4 || pawn_square == Square::B3 {
-        //     info!("{:?}", file_mask_left);
-        //     info!("{:?}", file_mask_center);
-        //     info!("{:?}", file_mask_right);
-        //     info!("{:?}", total_file_mask);
-        //     info!("{:?}", passed_pawn_mask);
-        //     for sq in BitBoard::new(passed_pawn_mask) {
-        //         debug!("{:?}", sq)
-        //     }
-        //     debug!("now here are pawns:");
-        //     for sq in *enemy_pawns {
-        //         debug!("{:?}", sq)
-        //     }
-        // }
     }
 
     fn pawn_bonus_value(
@@ -273,7 +265,7 @@ impl EvaluatorBot2010 {
         enemy_pawns: &BitBoard,
         friendly_pawns: &BitBoard,
     ) -> i32 {
-        let mut bonus_value = 0;
+        let mut bonus_value: i32 = 0;
         // passed pawns are good, even better with less material on the board
         // only look for passed pawns after the opponent has lost 6 pieces
         if self.is_passed_pawn(enemy_pawns, square, pawn_color) {
@@ -286,38 +278,31 @@ impl EvaluatorBot2010 {
                     Black => rank,
                 }
             };
-            bonus_value += match squares_to_promotion {
-                1 => 150,
-                2 => 90,
-                3 => 50,
-                4 => 20,
-                _ => 15,
-            };
+            bonus_value += PASSED_PAWN_BONUS[squares_to_promotion];
         };
 
         // let's do some bitboard stuff to figure out if this pawn is supported
 
         let file_index = square.get_file().to_index();
         let file_mask_center = FILE_A_MASK << file_index;
-        let file_mask_left = FILE_A_MASK << (file_index).max(1) - 1;
+        let file_mask_left = FILE_A_MASK << ((file_index).max(1) - 1);
         let file_mask_right = FILE_A_MASK << (file_index + 1).min(7);
 
-        let mut bonus = 0;
-
         // if more than one friendly pawn is in the same file, that's not ideal
-        bonus += match (friendly_pawns & BitBoard::new(file_mask_center)).popcnt() {
+        bonus_value += match (friendly_pawns & BitBoard::new(file_mask_center)).popcnt() {
             // this bonus will be applied to each pawn
             0 | 1 => 0,
             2 => -10,
             _ => -20,
         };
         // if a pawn is isolated, that's not ideal
-        bonus += match (friendly_pawns & BitBoard::new(file_mask_left | file_mask_right)).popcnt() {
-            0 => -20,
-            1 => -6,
-            _ => 0,
-        };
-        return bonus_value as i32;
+        bonus_value +=
+            match (friendly_pawns & BitBoard::new(file_mask_left | file_mask_right)).popcnt() {
+                0 => -20,
+                1 => -6,
+                _ => 0,
+            };
+        return bonus_value;
     }
 
     fn interpolated_pawn_pst(&self, endgame_factor: u32, color_specific_index: usize) -> i32 {
@@ -325,8 +310,8 @@ impl EvaluatorBot2010 {
         match endgame_factor {
             0 => PAWN_PST[color_specific_index],
             1..=5 => {
-                (((6 - endgame_factor) as i32 * PAWN_PST[color_specific_index]) as i32
-                    + (endgame_factor as i32 * PAWN_PST_ENDGAME[color_specific_index]) as i32)
+                (((6 - endgame_factor) as i32 * PAWN_PST[color_specific_index])
+                    + (endgame_factor as i32 * PAWN_PST_ENDGAME[color_specific_index]))
                     / 6
             }
             6 => PAWN_PST_ENDGAME[color_specific_index],
@@ -476,31 +461,25 @@ impl EvaluatorBot2010 {
                 guess_score += 10000
             }
 
-            match mv.get_promotion() {
-                // promotions are good
-                Some(piece) => guess_score += self.piece_values.get(&piece).unwrap(),
-                _ => (),
+            // promotions are good
+            if let Some(piece) = mv.get_promotion() {
+                guess_score += self.piece_values.get(&piece).unwrap()
             }
+
             let move_target = mv.get_dest();
-            match board.piece_on(move_target) {
+            if let Some(piece) = board.piece_on(move_target) {
                 // for captures, score is enemy piece value minus a fraction of our piece value
                 // capturing cheap pieces with valuable pieces is likely a bad idea
-                Some(piece) => {
-                    guess_score += self.piece_values.get(&piece).unwrap()
-                        - (self
-                            .piece_values
-                            .get(&board.piece_on(mv.get_source()).unwrap())
-                            .unwrap()
-                            / 2);
-                    // a capture that can be recaptured by an enemy is worse
-                    let pawn_attacks = chess::get_pawn_attacks(
-                        move_target,
-                        board.side_to_move(),
-                        BitBoard::new(0),
-                    );
-                    // trace!("pawn attacks: {}", pawn_attacks)
-                }
-                None => (),
+                guess_score += self.piece_values.get(&piece).unwrap()
+                    - (self
+                        .piece_values
+                        .get(&board.piece_on(mv.get_source()).unwrap())
+                        .unwrap()
+                        / 2);
+                // a capture that can be recaptured by an enemy is worse
+                // let pawn_attacks =
+                //     chess::get_pawn_attacks(move_target, board.side_to_move(), BitBoard::new(0));
+                // trace!("pawn attacks: {}", pawn_attacks)
             }
             guess_values.push((mv, guess_score))
         }
@@ -560,7 +539,6 @@ impl EvaluatorBot2010 {
                     .or_insert(0) += 1;
             }
         }
-        println!("{:?}", seen_positions);
 
         for n in 2.min(depth)..=depth {
             self.current_search_depth = n;
@@ -721,7 +699,7 @@ impl EvaluatorBot2010 {
                         -alpha,
                         kill_time,
                         Some(vec![&best_response]),
-                        Some(new_seen_positions),
+                        &new_seen_positions,
                     );
                 }
                 alpha += 1;
@@ -781,12 +759,10 @@ impl EvaluatorBot2010 {
         for (i, (mv, val)) in move_values.iter().enumerate() {
             // pruning these moves may be covering the root of the problem
             // but i can't imagine this doing anything but helping so
-            if alpha > -900000 {
-                if *val < -900000 {
-                    // ignore losing moves in future searches
-                    // trace!("Avoiding a losing move - {}", mv.to_string());
-                    continue;
-                }
+            if alpha > -900000 && *val < -900000 {
+                // ignore losing moves in future searches
+                // trace!("Avoiding a losing move - {}", mv.to_string());
+                continue;
             }
             order_moves.push((*mv, *val))
         }
@@ -822,7 +798,7 @@ impl EvaluatorBot2010 {
         beta: i32,
         kill_time: &Instant,
         suggested_moves: Option<Vec<&ChessMove>>, // try this move first
-        seen_positions: Option<HashMap<u64, u32>>,
+        seen_positions: &HashMap<u64, u32>,
     ) -> (i32, ChessMove) {
         // Search for the best move using alpha-beta pruning
         let default_move = ChessMove::new(Square::A1, Square::A1, None);
@@ -893,7 +869,8 @@ impl EvaluatorBot2010 {
         for (mv, _) in self.get_moves_lazily_ordered(board, movegen, suggested_moves) {
             let nboard = board.make_move_new(mv);
             // add this position to the map of positions we've seen before
-            let (new_seen_positions, is_draw) = match maybe_check_for_draw(&seen_positions, board) {
+            let (new_seen_positions, is_draw) = match check_for_draw(seen_positions.clone(), board)
+            {
                 Ok(m) => (m, false),
                 Err(_) => (HashMap::new(), true),
             };
@@ -911,7 +888,7 @@ impl EvaluatorBot2010 {
                     -alpha,
                     kill_time,
                     Some(vec![&best_response]),
-                    Some(new_seen_positions),
+                    &new_seen_positions,
                 )
             };
             // we don't have all the nodes on this tree yet
@@ -939,8 +916,8 @@ impl EvaluatorBot2010 {
                 self.transposition_table.insert(
                     board.get_hash(),
                     Transposition {
-                        depth: depth,
-                        ply: ply,
+                        depth,
+                        ply,
                         score: evaluation,
                         node_type: NodeType::LowerBound,
                         best_move: mv,
@@ -997,7 +974,7 @@ impl EvaluatorBot2010 {
         mut alpha: i32,
         beta: i32,
         kill_time: &Instant,
-        seen_positions: Option<HashMap<u64, u32>>,
+        seen_positions: &HashMap<u64, u32>,
     ) -> i32 {
         if ply > self.search_stats.max_ply {
             self.search_stats.max_ply = ply
@@ -1041,8 +1018,15 @@ impl EvaluatorBot2010 {
             // clear out seen_positions after capture moves
             // capture moves change everything such that the old positions are all useless, right?
             let nboard = board.make_move_new(mv);
-            let move_search_score =
-                self.search_only_captures(&nboard, ply + 1, -beta, -alpha, kill_time, None);
+            let new_seen_positions = HashMap::new();
+            let move_search_score = self.search_only_captures(
+                &nboard,
+                ply + 1,
+                -beta,
+                -alpha,
+                kill_time,
+                &new_seen_positions,
+            );
             let score = -move_search_score;
             self.search_stats.nodes_searched += 1;
             if score >= beta {
@@ -1091,7 +1075,8 @@ impl EvaluatorBot2010 {
             // it is too expensive to copy the whole game object
             // so we keep this map of board hashes to the number of times we've seen them
             // if we see the same board three times it's a draw by repetition
-            let (new_seen_positions, is_draw) = match maybe_check_for_draw(&seen_positions, board) {
+            let (new_seen_positions, is_draw) = match check_for_draw(seen_positions.clone(), board)
+            {
                 Ok(m) => (m, false),
                 Err(_) => (HashMap::new(), true),
             };
@@ -1105,7 +1090,7 @@ impl EvaluatorBot2010 {
                     -beta,
                     -alpha,
                     kill_time,
-                    Some(new_seen_positions),
+                    &new_seen_positions,
                 )
             };
             score = -move_search_score;

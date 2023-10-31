@@ -1,4 +1,15 @@
 
+### 0.0.14-rc8
+
+- seen_positions is now a slice
+
+### 0.0.14-rc7
+
+- Replaced many calculations with array lookups
+
+### 0.0.14-rc6
+
+- Fixed a bug where isolated and stacked pawns were not properly being considered during evaluation
 
 ### 0.0.14-rc5
 

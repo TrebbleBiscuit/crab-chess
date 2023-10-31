@@ -199,7 +199,7 @@ fn wait_for_uci() -> Result<(), ()> {
 
                                 // think for, at most, half of the remaining time
                                 let max_think_time: i32 = (rem.num_milliseconds() / 2) as i32;
-                                think_time = burn_time.min(max_think_time as i32);
+                                think_time = burn_time.min(max_think_time);
                                 debug!("Think time set to {}", think_time);
                             }
                         }

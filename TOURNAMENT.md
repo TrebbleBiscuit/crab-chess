@@ -168,6 +168,34 @@ SPRT: llr 0 (0.0%), lbound -inf, ubound inf
 
 
 
+Rank Name                          Elo     +/-   Games   Score    Draw 
+   1 crab-chess-0.0.14-rc5          75      36     240   60.6%   33.8% 
+   2 crab-chess-0.0.14-rc4          69      37     240   59.8%   31.3% 
+   3 crab-chess-0.0.14-rc6          69      36     240   59.8%   34.6% 
+   4 crab-chess-0.0.14-rc3        -243      46     240   19.8%   20.4% 
+
+SPRT: llr 0 (0.0%), lbound -inf, ubound inf
+480 of 480 games finished.
+
+
+
+Score of crab-chess-0.0.14-rc7 vs crab-chess-0.0.14-rc6: 27 - 22 - 31 [0.531]
+...      crab-chess-0.0.14-rc7 playing White: 14 - 10 - 16  [0.550] 40
+...      crab-chess-0.0.14-rc7 playing Black: 13 - 12 - 15  [0.512] 40
+...      White vs Black: 26 - 23 - 31  [0.519] 80
+Elo difference: 21.7 +/- 60.1, LOS: 76.2 %, DrawRatio: 38.8 %
+SPRT: llr 0 (0.0%), lbound -inf, ubound inf
+80 of 80 games finished.
+
+
+Score of crab-chess-0.0.14-rc8 vs crab-chess-0.0.14-rc7: 27 - 19 - 34 [0.550]
+...      crab-chess-0.0.14-rc8 playing White: 12 - 12 - 16  [0.500] 40
+...      crab-chess-0.0.14-rc8 playing Black: 15 - 7 - 18  [0.600] 40
+...      White vs Black: 19 - 27 - 34  [0.450] 80
+Elo difference: 34.9 +/- 58.3, LOS: 88.1 %, DrawRatio: 42.5 %
+SPRT: llr 0 (0.0%), lbound -inf, ubound inf
+80 of 80 games finished.
+
 
 
 
