@@ -1,4 +1,22 @@
 
+
+### 0.0.14-rc5
+
+- Properly implement more efficient repetition detection
+- Some other optimizations
+
+### 0.0.14-rc4
+
+- Pass slices instead of move values around
+- Testing more efficient repetition detection
+
+### 0.0.14-rc3
+
+- Changed endgame board evaluation in several ways:
+    - Tripled the effect of king positioning
+    - Increased the bonus for pawns near promotion (200, 120, 70, 30)
+    - Decreased effect of king piece-square table
+
 ### 0.0.14-rc2
 
 Evaluate a board as stronger if pawns have support and are not doubled up

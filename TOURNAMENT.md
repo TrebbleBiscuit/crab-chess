@@ -121,6 +121,55 @@ SPRT: llr 0 (0.0%), lbound -inf, ubound inf
 
 
 
+Rank Name                          Elo     +/-   Games   Score    Draw 
+   1 stockfish-lvl2                 90      28     600   62.7%    4.3% 
+   2 crab-chess-0.0.13-rc9          51      25     600   57.3%   19.7% 
+   3 crab-chess-0.0.14-rc2          45      25     600   56.4%   22.8% 
+   4 stockfish-lvl1                -47      27     600   43.3%    4.2% 
+   5 crab-chess-0.0.12             -67      23     600   40.4%   31.2% 
+   6 crab-chess-0.0.11             -71      24     600   39.9%   28.8% 
+
+SPRT: llr 0 (0.0%), lbound -inf, ubound inf
+1800 of 1800 games finished.
+
+
+
+Score of crab-chess-0.0.14-rc2 vs crab-chess-0.0.14-rc3: 20 - 36 - 24 [0.400]
+...      crab-chess-0.0.14-rc2 playing White: 12 - 15 - 13  [0.463] 40
+...      crab-chess-0.0.14-rc2 playing Black: 8 - 21 - 11  [0.338] 40
+...      White vs Black: 33 - 23 - 24  [0.563] 80
+Elo difference: -70.4 +/- 65.2, LOS: 1.6 %, DrawRatio: 30.0 %
+SPRT: llr 0 (0.0%), lbound -inf, ubound inf
+80 of 80 games finished.
+
+
+
+Rank Name                          Elo     +/-   Games   Score    Draw 
+   1 crab-chess-0.0.14-rc4         205      51     200   76.5%   15.0% 
+   2 stockfish-lvl2                 31      48     200   54.5%    4.0% 
+   3 crab-chess-0.0.14-rc3         -40      44     200   44.3%   18.5% 
+   4 crab-chess-0.0.14-rc2         -54      43     200   42.3%   23.5% 
+   5 crab-chess-0.0.14-rc1         -56      43     200   42.0%   21.0% 
+   6 stockfish-lvl1                -67      47     200   40.5%    8.0% 
+
+SPRT: llr 0 (0.0%), lbound -inf, ubound inf
+600 of 600 games finished.
+
+
+
+
+Score of crab-chess-0.0.14-rc5 vs crab-chess-0.0.14-rc4: 21 - 29 - 30 [0.450]
+...      crab-chess-0.0.14-rc5 playing White: 12 - 12 - 16  [0.500] 40
+...      crab-chess-0.0.14-rc5 playing Black: 9 - 17 - 14  [0.400] 40
+...      White vs Black: 29 - 21 - 30  [0.550] 80
+Elo difference: -34.9 +/- 60.9, LOS: 12.9 %, DrawRatio: 37.5 %
+SPRT: llr 0 (0.0%), lbound -inf, ubound inf
+80 of 80 games finished.
+
+
+
+
+
 
 
 cutechess-cli.exe -engine conf=crab-chess-0.0.14-rc1 -engine conf=crab-chess-0.0.14-rc2 -openings file=
