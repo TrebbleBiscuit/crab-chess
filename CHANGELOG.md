@@ -1,7 +1,8 @@
 
 ### 0.0.15-rc5
 
-Revert a change to checkmate evaluation
+- Revert a change to checkmate evaluation
+- Get out of check before calling serach_only_captures()
 
 ### 0.0.15-rc4
 

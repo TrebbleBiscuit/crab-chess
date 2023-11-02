@@ -1160,8 +1160,7 @@ fn check_for_draw(
 ) -> Result<HashMap<u64, u32>, ()> {
     let value = new_seen_positions.entry(board.get_hash()).or_insert(0);
     *value += 1;
-    if *value >= 2 {
-        // DEBUG: trying `>= 2` to avoid the bot choosing to stalemate for some reason
+    if *value >= 3 {
         Err(())
     } else {
         Ok(new_seen_positions)
