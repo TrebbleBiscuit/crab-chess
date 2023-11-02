@@ -1,4 +1,20 @@
 
+### 0.0.15-rc5
+
+Revert a change to checkmate evaluation
+
+### 0.0.15-rc4
+
+- Give a bonus to queen promotions, not all promotions
+
+### 0.0.15-rc3
+
+- Increase transposition table size to about 20 MB
+
+### 0.0.15-rc1
+
+- Mop up more often
+
 ### 0.0.14-rc9
 
 - More array lookups instead of calculations

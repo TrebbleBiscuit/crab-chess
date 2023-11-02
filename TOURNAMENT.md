@@ -197,6 +197,53 @@ SPRT: llr 0 (0.0%), lbound -inf, ubound inf
 80 of 80 games finished.
 
 
+Below is a comparison of minor version 0.0.14 and minor version 0.0.13
+
+Score of crab-chess-0.0.14-rc8 vs crab-chess-0.0.13-rc9: 56 - 3 - 21 [0.831]
+...      crab-chess-0.0.14-rc8 playing White: 34 - 1 - 5  [0.912] 40
+...      crab-chess-0.0.14-rc8 playing Black: 22 - 2 - 16  [0.750] 40
+...      White vs Black: 36 - 23 - 21  [0.581] 80
+Elo difference: 277.0 +/- 76.8, LOS: 100.0 %, DrawRatio: 26.3 %
+SPRT: llr 0 (0.0%), lbound -inf, ubound inf
+80 of 80 games finished.
+
+
+Score of crab-chess-0.0.15-rc1 vs crab-chess-0.0.14-rc9: 21 - 20 - 39 [0.506]
+...      crab-chess-0.0.15-rc1 playing White: 12 - 8 - 20  [0.550] 40
+...      crab-chess-0.0.15-rc1 playing Black: 9 - 12 - 19  [0.463] 40
+...      White vs Black: 24 - 17 - 39  [0.544] 80
+Elo difference: 4.3 +/- 54.9, LOS: 56.2 %, DrawRatio: 48.8 %
+SPRT: llr 0 (0.0%), lbound -inf, ubound inf
+80 of 80 games finished.
+
+
+Score of crab-chess-0.0.15-rc2 vs crab-chess-0.0.15-rc1: 23 - 16 - 41 [0.544]
+...      crab-chess-0.0.15-rc2 playing White: 9 - 8 - 23  [0.512] 40
+...      crab-chess-0.0.15-rc2 playing Black: 14 - 8 - 18  [0.575] 40
+...      White vs Black: 17 - 22 - 41  [0.469] 80
+Elo difference: 30.5 +/- 53.5, LOS: 86.9 %, DrawRatio: 51.2 %
+SPRT: llr 0 (0.0%), lbound -inf, ubound inf
+80 of 80 games finished.
+
+
+Score of crab-chess-0.0.15-rc3 vs crab-chess-0.0.15-rc2: 27 - 24 - 29 [0.519]
+...      crab-chess-0.0.15-rc3 playing White: 11 - 12 - 17  [0.487] 40
+...      crab-chess-0.0.15-rc3 playing Black: 16 - 12 - 12  [0.550] 40
+...      White vs Black: 23 - 28 - 29  [0.469] 80
+Elo difference: 13.0 +/- 61.4, LOS: 66.3 %, DrawRatio: 36.3 %
+SPRT: llr 0 (0.0%), lbound -inf, ubound inf
+80 of 80 games finished.
+
+
+Score of crab-chess-0.0.15-rc5 vs crab-chess-0.0.15-rc3: 26 - 21 - 33 [0.531]
+...      crab-chess-0.0.15-rc5 playing White: 17 - 9 - 14  [0.600] 40
+...      crab-chess-0.0.15-rc5 playing Black: 9 - 12 - 19  [0.463] 40
+...      White vs Black: 29 - 18 - 33  [0.569] 80
+Elo difference: 21.7 +/- 58.9, LOS: 76.7 %, DrawRatio: 41.3 %
+SPRT: llr 0 (0.0%), lbound -inf, ubound inf
+80 of 80 games finished.
+
+
 
 
 

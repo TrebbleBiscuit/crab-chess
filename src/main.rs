@@ -122,7 +122,7 @@ fn wait_for_uci() -> Result<(), ()> {
     let mut think_time: i32 = default_think_time;
     for line in io::stdin().lock().lines() {
         let msg: UciMessage = parse_one(&line.unwrap());
-        info!("Received message: {}", msg.to_string());
+        debug!("Received message from stdin: {}", msg.to_string());
         // if msg.to_string() == "dumptt" {
         //     evaluator.dumptt();
         // }

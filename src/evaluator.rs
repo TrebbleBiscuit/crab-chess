@@ -1,7 +1,9 @@
 use crate::precomputed;
 use chess::Color::{self, Black, White};
 use chess::Piece::{Bishop, King, Knight, Pawn, Queen, Rook};
-use chess::{BitBoard, Board, BoardStatus, ChessMove, Game, MoveGen, Piece, Square, ALL_PIECES};
+use chess::{
+    BitBoard, Board, BoardStatus, ChessMove, Game, MoveGen, Piece, Square, ALL_PIECES, EMPTY,
+};
 use indicatif::{ProgressBar, ProgressStyle};
 use log::{debug, info, trace};
 use std::collections::HashMap;
@@ -133,7 +135,7 @@ impl TranspositionTable {
         Self(
             // 2^18 is 262,144
             // at ~40b each that's around 10.5 megabytes
-            chess::CacheTable::new(1 << 18, Transposition::empty()),
+            chess::CacheTable::new(1 << 19, Transposition::empty()),
         )
     }
 
@@ -390,8 +392,8 @@ impl EvaluatorBot2010 {
             }
         }
 
-        if (white_pawns | black_pawns).popcnt() == 0 {
-            // Mop up when there are no pawns left
+        if all_major_pieces.popcnt() < 5 {
+            // Mop up when there are few pieces left
             // it's good for the player who's winning if they get near the enemy king
             let white_king = white_pieces & board.pieces(Piece::King);
             let black_king = black_pieces & board.pieces(Piece::King);
@@ -399,10 +401,10 @@ impl EvaluatorBot2010 {
                 [black_king.to_square().to_index()];
             // if this is good for white add score
             // if this is good for black remove score
-            if total_score > 200 {
+            if total_score > 300 {
                 // white is winning
                 total_score += 5 * (10 - dist as i32);
-            } else if total_score < -200 {
+            } else if total_score < -300 {
                 // black is winning
                 total_score -= 5 * (10 - dist as i32);
             } else {
@@ -446,7 +448,9 @@ impl EvaluatorBot2010 {
 
             // promotions are good
             if let Some(piece) = mv.get_promotion() {
-                guess_score += self.piece_values.get(&piece).unwrap()
+                if piece == Piece::Queen {
+                    guess_score += 900
+                }
             }
 
             let move_target = mv.get_dest();
@@ -530,7 +534,7 @@ impl EvaluatorBot2010 {
             // execute a top level search
             (score, chosen_move, move_order, best_resp) =
                 self.top_level_search(board, n, move_order, &kill_time, &seen_positions);
-            info!(
+            debug!(
                 "Depth: {} - {} -> {} @ {} - {:?}",
                 n,
                 chosen_move,
@@ -552,6 +556,12 @@ impl EvaluatorBot2010 {
                     best_resp.to_string()
                 }
             );
+            // if we have checkmate just go for it
+            // for some reason this makes it play worse
+            // which doesn't seem to make sense
+            // if score > 999000 {
+            //     return (score, chosen_move);
+            // }
             // trace!("TT Size is now {}", self.transposition_table.0.len());
             // add to cumulative search stats then clear search_stats for next time
             self.cum_search_stats += self.search_stats;
@@ -611,7 +621,7 @@ impl EvaluatorBot2010 {
             .unwrap()
             .progress_chars("##-"),
         );
-        for (mv_index, (mv, _)) in move_order.iter().enumerate() {
+        for (mv_index, (mv, mv_naive_score)) in move_order.iter().enumerate() {
             bar.inc(1); // increment progress bar
 
             let nboard = board.make_move_new(*mv);
@@ -639,18 +649,19 @@ impl EvaluatorBot2010 {
                     0
                 };
 
-                // first few moves are full depth, but search remaining non-capture moves at shallower depth
-                // no depth reduction when depth <= 3
-                // will enable better ordered moves during later searches
-                if depth_modifier <= 0 && depth > 3 && mv_index >= 3 {
-                    // we won't reduce depth of capture moves
-                    // because depth modifier is already below 0
-                    depth_modifier -= 1;
-                    if mv_index >= 8 && depth > 4 {
-                        // even later moves are even more reduced
-                        depth_modifier -= 1;
-                    }
-                };
+                // // first few moves are full depth, but search remaining non-capture moves at shallower depth
+                // // no depth reduction when depth <= 3
+                // // will enable better ordered moves during later searches
+                // if depth_modifier <= 0 && depth > 4 && mv_index >= 4 {
+                //     // we won't reduce depth of capture moves
+                //     // because depth modifier is already below 0
+                //     depth_modifier -= 1;
+                //     if mv_index >= 8 && depth > 5 {
+                //         // even later moves are even more reduced
+                //         depth_modifier -= 1;
+                //     }
+                // };
+
                 let mut needs_full_search = true;
                 let mut move_search_score = 10101010; // this is ALWAYS overwritten
                 let mut best_response_mv = default_move; // this is ALWAYS overwritten
@@ -664,6 +675,33 @@ impl EvaluatorBot2010 {
                 //         self.search_stats.depth_reduction_hits += 1;
                 //         needs_full_search = false;
                 //     }
+
+                // let's try implementing principal variation search instead
+                // we search the first move (assumed to be the best) normally, then other
+                // moves are searched with a "null window" - instead of passing negative beta
+                // in as the search alpha, pass in negative alpha minus one.
+                // if the score is between alpha and beta (it failed high) then we need
+                // to do a full re-search
+
+                // this didn't go well, 19 - 24 - 37 against the last version
+                // i guess the move ordering isn't as great as I thought?
+                // if mv_index > 3 && depth > 3 {
+                //     (move_search_score, best_response_mv) = self.search(
+                //         &nboard,
+                //         depth + depth_modifier as usize - 1,
+                //         1,
+                //         -alpha - 1, // null window
+                //         -alpha,
+                //         kill_time,
+                //         Some(vec![&best_response]),
+                //         &new_seen_positions,
+                //     );
+                //     if alpha < -move_search_score && -move_search_score < beta {
+                //         // failed high! need to re-search :(
+                //     } else {
+                //         needs_full_search = false;
+                //     }
+                // }
 
                 if needs_full_search {
                     if depth_modifier < 0 {
@@ -775,7 +813,7 @@ impl EvaluatorBot2010 {
         &mut self,
         board: &Board,
         // game: &Game,
-        depth: usize,
+        mut depth: usize,
         ply: usize,
         mut alpha: i32,
         beta: i32,
@@ -836,12 +874,24 @@ impl EvaluatorBot2010 {
         }
 
         if depth == 0 {
-            // assumes depth > 0 when this fn is called for the first time
-            // otherwise it will return default_move
-            return (
-                self.search_only_captures(board, ply + 1, alpha, beta, kill_time, seen_positions),
-                default_move,
-            );
+            if board.checkers() != &EMPTY {
+                // get out of check first
+                depth += 1
+            } else {
+                // assumes depth > 0 when this fn is called for the first time
+                // otherwise it will return default_move
+                return (
+                    self.search_only_captures(
+                        board,
+                        ply + 1,
+                        alpha,
+                        beta,
+                        kill_time,
+                        seen_positions,
+                    ),
+                    default_move,
+                );
+            }
         }
 
         // for future transposition table
@@ -1110,7 +1160,8 @@ fn check_for_draw(
 ) -> Result<HashMap<u64, u32>, ()> {
     let value = new_seen_positions.entry(board.get_hash()).or_insert(0);
     *value += 1;
-    if *value >= 3 {
+    if *value >= 2 {
+        // DEBUG: trying `>= 2` to avoid the bot choosing to stalemate for some reason
         Err(())
     } else {
         Ok(new_seen_positions)
