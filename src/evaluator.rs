@@ -515,7 +515,7 @@ impl EvaluatorBot2010 {
         // replay all actions onto a new game to create seen_positions
         for replay_action in game.actions() {
             if let chess::Action::MakeMove(replay_mv) = replay_action {
-                let replay_board = game.current_position();
+                let replay_board = replay_game.current_position();
                 if replay_board.piece_on(replay_mv.get_dest()).is_some() {
                     // a capture move means we'll never see any of the previous positions again
                     seen_positions.clear();
@@ -631,11 +631,11 @@ impl EvaluatorBot2010 {
             // let mut hgame = game.clone();
             // hgame.make_move(*mv);
 
-            let (new_seen_positions, is_draw) = match check_for_draw(seen_positions.clone(), board)
-            {
-                Ok(previous_map) => (previous_map, false),
-                Err(_) => (HashMap::new(), true),
-            };
+            let (new_seen_positions, is_draw) =
+                match check_for_draw(seen_positions.clone(), &nboard) {
+                    Ok(previous_map) => (previous_map, false),
+                    Err(_) => (HashMap::new(), true),
+                };
 
             let (evaluation, this_response) = if is_draw {
                 (STALEMATE_SCORE, default_move)
@@ -902,11 +902,11 @@ impl EvaluatorBot2010 {
         for (mv, _) in self.get_moves_lazily_ordered(board, movegen, suggested_moves) {
             let nboard = board.make_move_new(mv);
             // add this position to the map of positions we've seen before
-            let (new_seen_positions, is_draw) = match check_for_draw(seen_positions.clone(), board)
-            {
-                Ok(m) => (m, false),
-                Err(_) => (HashMap::new(), true),
-            };
+            let (new_seen_positions, is_draw) =
+                match check_for_draw(seen_positions.clone(), &nboard) {
+                    Ok(m) => (m, false),
+                    Err(_) => (HashMap::new(), true),
+                };
             // let mut hyp_game = game.clone();
             // hyp_game.make_move(mv);
             let (move_search_score, sub_response) = if is_draw {
@@ -1108,11 +1108,11 @@ impl EvaluatorBot2010 {
             // it is too expensive to copy the whole game object
             // so we keep this map of board hashes to the number of times we've seen them
             // if we see the same board three times it's a draw by repetition
-            let (new_seen_positions, is_draw) = match check_for_draw(seen_positions.clone(), board)
-            {
-                Ok(m) => (m, false),
-                Err(_) => (HashMap::new(), true),
-            };
+            let (new_seen_positions, is_draw) =
+                match check_for_draw(seen_positions.clone(), &nboard) {
+                    Ok(m) => (m, false),
+                    Err(_) => (HashMap::new(), true),
+                };
 
             let move_search_score = if is_draw {
                 0

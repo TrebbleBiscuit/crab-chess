@@ -1,3 +1,7 @@
+### 0.0.16
+
+- Fixed a bug in stalemate detection
+- Increased urgency during zero increment games
 
 ### 0.0.15-rc5
 

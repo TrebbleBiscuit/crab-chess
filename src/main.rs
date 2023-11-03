@@ -189,15 +189,20 @@ fn wait_for_uci() -> Result<(), ()> {
                                 }
                             }
                             if let Some(rem) = remaining_time {
-                                // how much longer will this game last? 10-70 moves
-                                let est_turns_remaining = 70 - game.actions().len().min(60);
-                                // this is how much time we'll burn from our clock
-                                let mut burn_time =
-                                    rem.num_milliseconds() as i32 / est_turns_remaining as i32;
-                                if let Some(inc) = my_increment {
+                                let extra_burn_time = if let Some(inc) = my_increment {
                                     // we'll also burn most of our increment time
-                                    burn_time += (inc.num_milliseconds() as f64 * 0.8) as i32;
-                                }
+                                    (inc.num_milliseconds() as f64 * 0.8) as i32
+                                } else {
+                                    0
+                                };
+                                let predicted_game_length =
+                                    if extra_burn_time == 0 { 85 } else { 70 };
+                                // how much longer will this game last? from 10 to predicted_game_length moves
+                                let est_turns_remaining = predicted_game_length
+                                    - game.actions().len().min(predicted_game_length - 10);
+                                // this is how much time we'll burn from our clock
+                                let burn_time = extra_burn_time
+                                    + (rem.num_milliseconds() as i32 / est_turns_remaining as i32);
 
                                 // think for, at most, half of the remaining time
                                 let max_think_time: i32 = (rem.num_milliseconds() / 2) as i32;
@@ -228,7 +233,10 @@ fn wait_for_uci() -> Result<(), ()> {
             }
             UciMessage::Quit => return Ok(()),
             _ => {
-                // info!("{:?}", msg)
+                eprintln!(
+                    "info string DEBUG: I did not understand your message: {:?}",
+                    msg
+                )
             }
         }
     }

@@ -245,6 +245,38 @@ SPRT: llr 0 (0.0%), lbound -inf, ubound inf
 
 
 
+Rank Name                          Elo     +/-   Games   Score    Draw 
+   1 crab-chess-0.0.15-rc5         217      47     202   77.7%   24.8% 
+   2 crab-chess-0.0.14-rc9         187      45     201   74.6%   25.9% 
+   3 crab-chess-0.0.13-rc9         -55      40     199   42.2%   32.2% 
+   4 crab-chess-0.0.11             -59      39     201   41.5%   36.3% 
+   5 crab-chess-0.0.12            -111      40     200   34.5%   35.0% 
+   6 crab-chess-0.0.10            -155      42     201   29.1%   31.3% 
+
+SPRT: llr 0 (0.0%), lbound -inf, ubound inf
+606 of 1500 games finished.
+
+
+
+Score of crab-chess-0.0.15-rc5 vs crab-chess-0.0.14-rc6: 50 - 36 - 74 [0.544]
+...      crab-chess-0.0.15-rc5 playing White: 21 - 16 - 43  [0.531] 80
+...      crab-chess-0.0.15-rc5 playing Black: 29 - 20 - 31  [0.556] 80
+...      White vs Black: 41 - 45 - 74  [0.487] 160
+Elo difference: 30.5 +/- 39.6, LOS: 93.4 %, DrawRatio: 46.3 %
+SPRT: llr 0 (0.0%), lbound -inf, ubound inf
+160 of 160 games finished.
+
+
+Score of crab-chess-0.0.16 vs crab-chess-0.0.15-rc5: 23 - 22 - 35 [0.506]
+...      crab-chess-0.0.16 playing White: 13 - 11 - 16  [0.525] 40
+...      crab-chess-0.0.16 playing Black: 10 - 11 - 19  [0.487] 40
+...      White vs Black: 24 - 21 - 35  [0.519] 80
+Elo difference: 4.3 +/- 57.5, LOS: 55.9 %, DrawRatio: 43.8 %
+SPRT: llr 0 (0.0%), lbound -inf, ubound inf
+80 of 80 games finished.
+
+
+
 
 
 cutechess-cli.exe -engine conf=crab-chess-0.0.14-rc1 -engine conf=crab-chess-0.0.14-rc2 -openings file=
