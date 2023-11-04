@@ -4,7 +4,6 @@ use chess::Piece::{Bishop, King, Knight, Pawn, Queen, Rook};
 use chess::{
     BitBoard, Board, BoardStatus, ChessMove, Game, MoveGen, Piece, Square, ALL_PIECES, EMPTY,
 };
-use indicatif::{ProgressBar, ProgressStyle};
 use log::{debug, info, trace};
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
@@ -612,18 +611,7 @@ impl EvaluatorBot2010 {
         // return move_values at the end, it'll be like the new version of move_order
         let mut move_values: Vec<(ChessMove, i32)> = Vec::new();
         // debug!("Searching {} moves at depth {}", move_order.len(), depth);
-        let bar = ProgressBar::new(move_order.len() as u64);
-        bar.set_message(format!("{}", alpha));
-        bar.set_style(
-            ProgressStyle::with_template(
-                "[{elapsed} - ETA: {eta}] {bar:40.cyan/blue} {pos:>7}/{len:7} {msg}",
-            )
-            .unwrap()
-            .progress_chars("##-"),
-        );
         for (mv_index, (mv, mv_naive_score)) in move_order.iter().enumerate() {
-            bar.inc(1); // increment progress bar
-
             let nboard = board.make_move_new(*mv);
             let default_move = ChessMove::new(Square::A1, Square::A1, None);
             // we clone game to check for draws on the top level game object
@@ -745,7 +733,6 @@ impl EvaluatorBot2010 {
                 alpha = evaluation;
                 best_move = *mv;
                 best_response = this_response;
-                bar.set_message(format!("{}", alpha));
                 trace!(
                     "top level alpha set -> {} @ {}",
                     best_move.to_string(),

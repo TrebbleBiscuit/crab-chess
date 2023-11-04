@@ -1,3 +1,8 @@
+### 0.0.17
+
+- Removed a few unnecessary dependencies
+- Added support for specifying depth in uci go command
+
 ### 0.0.16
 
 - Fixed a bug in stalemate detection

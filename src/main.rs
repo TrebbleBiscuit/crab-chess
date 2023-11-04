@@ -9,11 +9,10 @@ use std::io::stdin;
 use std::io::{self, BufRead};
 use std::str::FromStr;
 use std::time::Duration;
-use vampirc_uci::{parse_one, UciMessage};
+use vampirc_uci::{parse_one, UciMessage, UciSearchControl};
 pub mod evaluator;
 pub mod precomputed;
 pub mod speval;
-use serde::{Deserialize, Serialize};
 
 // #[derive(Serialize, Deserialize, Debug)]
 // struct BookEntry {
@@ -117,7 +116,7 @@ fn main() -> Result<(), ()> {
 fn wait_for_uci() -> Result<(), ()> {
     let mut game = Game::new();
     let mut evaluator = EvaluatorBot2010::new();
-    let move_depth = 9;
+    let mut move_depth = 9;
     let default_think_time: i32 = 4000;
     let mut think_time: i32 = default_think_time;
     for line in io::stdin().lock().lines() {
@@ -214,6 +213,12 @@ fn wait_for_uci() -> Result<(), ()> {
                             // think_time = think_time.min(time_ms.num_milliseconds() as i32);
                             think_time = time_ms.num_milliseconds() as i32;
                         }
+                    }
+                }
+
+                if let Some(sc) = search_control {
+                    if let Some(set_depth) = sc.depth {
+                        move_depth = set_depth as usize
                     }
                 }
 
