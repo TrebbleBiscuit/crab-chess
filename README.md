@@ -1,11 +1,8 @@
 # crab-chess
 
-Chess engine made for fun! See some games it's played online here - https://lichess.org/@/CrabChess
+Chess engine made for fun! One of my first Rust projects, but it has become increasingly capable over time. See games it has played online here - https://lichess.org/@/CrabChess
 
-- [Iterative deepening](https://www.chessprogramming.org/Iterative_Deepening) with [PV-Move ordering](https://www.chessprogramming.org/PV-Move) to find better moves faster
-- [Negamax](https://en.wikipedia.org/wiki/Negamax) with [alpha-beta pruning](https://en.wikipedia.org/wiki/Alpha%E2%80%93beta_pruning) to search only what we need to
-- [Quiescence search](https://www.chessprogramming.org/Quiescence_Search) to find stable board positions
-- Other fun and exciting techniques
+[Iterative deepening](https://www.chessprogramming.org/Iterative_Deepening) using [Negamax](https://en.wikipedia.org/wiki/Negamax) with [alpha-beta pruning](https://en.wikipedia.org/wiki/Alpha%E2%80%93beta_pruning) and [Quiescence search](https://www.chessprogramming.org/Quiescence_Search) along with all sorts of other fun and exciting techniques
 
 
 ### How to build
@@ -41,7 +38,7 @@ These commands tell the bot to
 - Enable uci mode
 - Create a new game
 - Specify a position in which, from the starting position, the move `e2e4` has been made
-- Tell the bot to think for 2.5 seconds 
+- Think for 2.5 seconds and make a move
 
 
 ### Logging

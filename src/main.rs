@@ -1,11 +1,9 @@
-use crate::evaluator::EvaluatorBot2010;
+use crate::evaluator::CrabChessEvaluator;
 use crate::speval::SinglePlayerEvaluator;
 use chess::Color::{Black, White};
-use chess::{Board, ChessMove, Game};
+use chess::{Board, Game};
 use log::{debug, error, info, warn};
-use std::collections::HashMap;
 use std::env;
-use std::io::stdin;
 use std::io::{self, BufRead};
 use std::str::FromStr;
 use std::time::Duration;
@@ -46,17 +44,6 @@ fn main() -> Result<(), ()> {
     } else {
         (true, "debug")
     };
-
-    // let env = Env::default().filter_or("CRAB_CHESS", "info");
-    // env_logger::init_from_env(env);
-
-    // let datetime_string = Utc::now().format("%Y-%m-%dT%H-%M-%S").to_string();
-    // let log_trace_file_name = format!("crablog/crab-log-trace-{}.log", datetime_string);
-    // simple_logging::log_to_file(log_trace_file_name, log::LevelFilter::Trace);
-
-    // println!("calling book test...");
-    // book_test();
-    // return Ok(());
 
     if log_enabled {
         // log to file and also to stdout
@@ -104,18 +91,13 @@ fn main() -> Result<(), ()> {
     }
 
     // bot_vs_bot();
-    // play_evaluator_bot_2010();
-    // Ok(())
-    // play_speval()
-    // _debug_evaluate()
-
     // let result = wait_for_uci();
-    return Ok(());
+    // return Ok(());
 }
 
 fn wait_for_uci() -> Result<(), ()> {
     let mut game = Game::new();
-    let mut evaluator = EvaluatorBot2010::new();
+    let mut evaluator = CrabChessEvaluator::new();
     let mut move_depth = 9;
     let default_think_time: i32 = 4000;
     let mut think_time: i32 = default_think_time;
@@ -248,106 +230,10 @@ fn wait_for_uci() -> Result<(), ()> {
     Ok(())
 }
 
-fn play_speval() {
-    let args: Vec<String> = env::args().collect();
-    debug!("{:?}", args);
-    // human color provided by first argument, otherwise AI vs AI
-    let player_color = if args.len() > 1 {
-        match args[1].to_lowercase().as_str() {
-            "white" => White.to_index(),
-            "black" => Black.to_index(),
-            _ => {
-                error!("Provided color not recognized, starting AI vs AI");
-                3
-            }
-        }
-    } else {
-        warn!("Provide the human's color as the first argument or it will be AI vs AI!");
-        3
-    };
-    let move_depth: usize = if args.len() > 3 {
-        args[3].parse::<usize>().unwrap()
-    } else {
-        5
-    };
-    // use fen if provided as an argument, otherwise new game
-    let mut game = if args.len() > 2 {
-        info!("Creating game from FEN");
-        Game::from_str(args[2].as_str()).expect("Valid FEN")
-    } else {
-        Game::new()
-    };
-
-    let mut board: Board;
-    let sp_evaluator = SinglePlayerEvaluator::new();
-    let mut bot_evaluator = EvaluatorBot2010::new();
-    loop {
-        board = game.current_position();
-        debug!(
-            "Board hash: {}; fen: {}",
-            board.get_hash(),
-            board.to_string()
-        );
-        let to_move = board.side_to_move();
-        info!("Move {} - {:?} to move", game.actions().len() + 1, to_move);
-        if game.result().is_some() {
-            info!("Game Over");
-            break;
-        } else if game.can_declare_draw() {
-            info!("Draw");
-            break;
-        }
-        // pick move
-        // match to_move {
-        //     White => {
-        //         let mv = sp_evaluator.top_level_search(&board, move_depth);
-        //         info!("{:?} SP Move: {}", to_move, mv.to_string());
-        //         game.make_move(mv);
-        //     }
-        //     Black => {
-        //         let (value, mv) = bot_evaluator.iterative_search_deepening(
-        //             &board,
-        //             &game,
-        //             move_depth,
-        //             Duration::new(10, 0),
-        //         );
-        //         info!("{:?} BOT Move: {} @ {}", to_move, mv.to_string(), value);
-        //         game.make_move(mv);
-        //     }
-        // }
-        if player_color != to_move.to_index() {
-            // AI's turn
-            let mv = sp_evaluator.top_level_search(&board, move_depth, Duration::from_secs(1));
-            info!("{:?} AI Move: {}", to_move, mv);
-            game.make_move(mv);
-        } else {
-            // Human's turn
-            info!("Enter your move");
-            let mut input = String::new();
-            stdin()
-                .read_line(&mut input)
-                .expect("error: unable to read user input");
-            if input == String::from("new game") {
-                game = Game::new()
-            }
-            let outcome = match ChessMove::from_san(&board, input.as_str()) {
-                Ok(mv) => game.make_move(mv),
-                Err(er) => {
-                    warn!("{:?}", er);
-                    false
-                }
-            };
-            if !outcome {
-                error!("Move failed")
-            }
-        }
-    }
-}
-
 fn bot_vs_bot() {
-    // let mut white_evaluator: evaluator::EvaluatorBot2010 = EvaluatorBot2010::new();
+    // let mut white_evaluator: evaluator::CrabChessEvaluator = CrabChessEvaluator::new();
     let mut white_evaluator = SinglePlayerEvaluator::new();
-    let mut black_evaluator: evaluator::EvaluatorBot2010 = EvaluatorBot2010::new();
+    let mut black_evaluator: evaluator::CrabChessEvaluator = CrabChessEvaluator::new();
     let mut board: Board;
     let move_depth: usize = 12;
     let mut game = Game::new();
@@ -384,89 +270,6 @@ fn bot_vs_bot() {
                 );
                 info!("{:?} AI Move: {} @ {}", to_move, mv, value);
                 game.make_move(mv);
-            }
-        }
-    }
-}
-
-fn play_evaluator_bot_2010() {
-    let args: Vec<String> = env::args().collect();
-    debug!("{:?}", args);
-    // human color provided by first argument, otherwise AI vs AI
-    let player_color = if args.len() > 1 {
-        match args[1].to_lowercase().as_str() {
-            "white" => White.to_index(),
-            "black" => Black.to_index(),
-            _ => {
-                error!("Provided color not recognized, starting AI vs AI");
-                3
-            }
-        }
-    } else {
-        warn!("Provide the human's color as the first argument or it will be AI vs AI!");
-        3
-    };
-    // use fen if provided as an argument, otherwise new game
-    let mut game: Game = if args.len() > 2 {
-        info!("Creating game from FEN");
-        Game::from_str(args[2].as_str()).expect("Valid FEN")
-    } else {
-        Game::new()
-    };
-
-    let mut evaluator: evaluator::EvaluatorBot2010 = EvaluatorBot2010::new();
-    let mut board: Board;
-    let move_depth: usize = if args.len() > 3 {
-        args[3].parse::<usize>().unwrap()
-    } else {
-        12
-    };
-    loop {
-        board = game.current_position();
-        debug!(
-            "Board hash: {}; fen: {}",
-            board.get_hash(),
-            board.to_string()
-        );
-        // println!("{:?}", game.actions());
-        let to_move = board.side_to_move();
-        info!("Move {} - {:?} to move", game.actions().len() + 1, to_move);
-        if !game.result().is_none() {
-            info!("Game Over");
-            break;
-        } else if game.can_declare_draw() {
-            info!("Draw");
-            break;
-        }
-        if player_color != to_move.to_index() {
-            // AI's turn
-            let (value, mv) = evaluator.iterative_search_deepening(
-                &board,
-                &game,
-                move_depth,
-                Duration::new(1, 0),
-            );
-            info!("{:?} AI Move: {} @ {}", to_move, mv, value);
-            game.make_move(mv);
-        } else {
-            // Human's turn
-            info!("Enter your move");
-            let mut input = String::new();
-            stdin()
-                .read_line(&mut input)
-                .expect("error: unable to read user input");
-            if input == String::from("new game") {
-                game = Game::new()
-            }
-            let outcome = match ChessMove::from_san(&board, input.as_str()) {
-                Ok(mv) => game.make_move(mv),
-                Err(er) => {
-                    warn!("{:?}", er);
-                    false
-                }
-            };
-            if !outcome {
-                error!("Move failed")
             }
         }
     }

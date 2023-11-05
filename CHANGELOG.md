@@ -1,3 +1,15 @@
+### 0.0.20
+
+- Fixed a bug where only capture moves were being included in quiescence search
+
+### 0.0.19
+
+- Improve quiescence searching
+
+### 0.0.18
+
+- Prune terrible looking moves in higher depth searches
+
 ### 0.0.17
 
 - Removed a few unnecessary dependencies

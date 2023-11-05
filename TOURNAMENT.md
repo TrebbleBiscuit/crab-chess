@@ -276,6 +276,42 @@ SPRT: llr 0 (0.0%), lbound -inf, ubound inf
 80 of 80 games finished.
 
 
+Score of crab-chess-0.0.18 vs crab-chess-0.0.16: 30 - 25 - 25 [0.531]
+...      crab-chess-0.0.18 playing White: 17 - 11 - 12  [0.575] 40
+...      crab-chess-0.0.18 playing Black: 13 - 14 - 13  [0.487] 40
+...      White vs Black: 31 - 24 - 25  [0.544] 80
+Elo difference: 21.7 +/- 63.8, LOS: 75.0 %, DrawRatio: 31.3 %
+SPRT: llr 0 (0.0%), lbound -inf, ubound inf
+80 of 80 games finished.
+
+
+Score of crab-chess-0.0.19 vs crab-chess-0.0.18: 33 - 22 - 25 [0.569]
+...      crab-chess-0.0.19 playing White: 19 - 10 - 11  [0.613] 40
+...      crab-chess-0.0.19 playing Black: 14 - 12 - 14  [0.525] 40
+...      White vs Black: 31 - 24 - 25  [0.544] 80
+Elo difference: 48.1 +/- 64.1, LOS: 93.1 %, DrawRatio: 31.3 %
+SPRT: llr 0 (0.0%), lbound -inf, ubound inf
+80 of 80 games finished.
+
+
+Score of crab-chess-0.0.20 vs crab-chess-0.0.19: 24 - 28 - 28 [0.475]
+...      crab-chess-0.0.20 playing White: 8 - 19 - 13  [0.362] 40
+...      crab-chess-0.0.20 playing Black: 16 - 9 - 15  [0.588] 40
+...      White vs Black: 17 - 35 - 28  [0.388] 80
+Elo difference: -17.4 +/- 62.0, LOS: 29.0 %, DrawRatio: 35.0 %
+SPRT: llr 0 (0.0%), lbound -inf, ubound inf
+80 of 80 games finished.
+
+
+Score of crab-chess-0.0.20 vs crab-chess-0.0.18: 37 - 22 - 21 [0.594]
+...      crab-chess-0.0.20 playing White: 20 - 11 - 9  [0.613] 40
+...      crab-chess-0.0.20 playing Black: 17 - 11 - 12  [0.575] 40
+...      White vs Black: 31 - 28 - 21  [0.519] 80
+Elo difference: 65.9 +/- 66.9, LOS: 97.5 %, DrawRatio: 26.3 %
+SPRT: llr 0 (0.0%), lbound -inf, ubound inf
+80 of 80 games finished.
+
+
 
 
 

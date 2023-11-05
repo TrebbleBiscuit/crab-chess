@@ -173,7 +173,7 @@ fn passed_pawn_mask_from_square(pawn_square: Square, pawn_color: Color) -> u64 {
     }
 }
 
-pub struct EvaluatorBot2010 {
+pub struct CrabChessEvaluator {
     piece_values: HashMap<Piece, i32>,
     transposition_table: TranspositionTable,
     trans_table_depth_threshold: usize,
@@ -182,9 +182,9 @@ pub struct EvaluatorBot2010 {
     current_search_depth: usize,
 }
 
-impl EvaluatorBot2010 {
-    pub fn new() -> EvaluatorBot2010 {
-        EvaluatorBot2010 {
+impl CrabChessEvaluator {
+    pub fn new() -> CrabChessEvaluator {
+        CrabChessEvaluator {
             // board: Board::default(),
             piece_values: [
                 (Pawn, 100),
@@ -614,11 +614,8 @@ impl EvaluatorBot2010 {
         for (mv_index, (mv, mv_naive_score)) in move_order.iter().enumerate() {
             let nboard = board.make_move_new(*mv);
             let default_move = ChessMove::new(Square::A1, Square::A1, None);
-            // we clone game to check for draws on the top level game object
-            // but that's too expensive so below that we use seen_positions
-            // let mut hgame = game.clone();
-            // hgame.make_move(*mv);
 
+            // Check for threefold repetition
             let (new_seen_positions, is_draw) =
                 match check_for_draw(seen_positions.clone(), &nboard) {
                     Ok(previous_map) => (previous_map, false),
@@ -740,24 +737,6 @@ impl EvaluatorBot2010 {
                 );
                 // trace!("    ->{}!! ", evaluation);
             }
-            // else if evaluation < -999000 {
-            //     trace!(
-            //         "found forced checkmate in top level move {} -> {}",
-            //         mv.to_string(),
-            //         this_response.to_string()
-            //     );
-            // } else {
-            //     // trace!("    ->{}  ", evaluation);
-            //     // print!(".. ");
-            //     // io::stdout().flush().unwrap();
-            // }
-
-            // // cancel search if we're out of time
-            // MOVED UP
-            // if kill_time.elapsed() > Duration::ZERO {
-            //     info!("Killing search because we're out of time");
-            //     break;
-            // }
         }
         trace!("");
         move_values.sort_by(|a, b| b.1.cmp(&a.1));
@@ -770,6 +749,10 @@ impl EvaluatorBot2010 {
             if i > 0 && alpha > -900000 && *val < -900000 {
                 // ignore losing moves in future searches
                 // trace!("Avoiding a losing move - {}", mv.to_string());
+                continue;
+            }
+            // let's also prune a move if we're reasonably deep and it looks absolutely terrible
+            if depth >= 4 && val + 750 < alpha {
                 continue;
             }
             order_moves.push((*mv, *val))
@@ -814,17 +797,7 @@ impl EvaluatorBot2010 {
         if board.status() == BoardStatus::Stalemate {
             return (STALEMATE_SCORE, default_move);
         }
-
-        // trace!("search board {} is {:?}", board.to_string(), board.status());
         if board.status() == BoardStatus::Checkmate {
-            // trace!(
-            //     "checkmate against {:?} as evaluated by search() depth {} alpha {} beta {}",
-            //     board.side_to_move(),
-            //     depth,
-            //     alpha,
-            //     beta
-            // );
-
             return (CHECKMATE_SCORE, default_move);
         }
 
@@ -868,14 +841,7 @@ impl EvaluatorBot2010 {
                 // assumes depth > 0 when this fn is called for the first time
                 // otherwise it will return default_move
                 return (
-                    self.search_only_captures(
-                        board,
-                        ply + 1,
-                        alpha,
-                        beta,
-                        kill_time,
-                        seen_positions,
-                    ),
+                    self.quiescence_search(board, ply + 1, alpha, beta, kill_time, seen_positions),
                     default_move,
                 );
             }
@@ -894,8 +860,6 @@ impl EvaluatorBot2010 {
                     Ok(m) => (m, false),
                     Err(_) => (HashMap::new(), true),
                 };
-            // let mut hyp_game = game.clone();
-            // hyp_game.make_move(mv);
             let (move_search_score, sub_response) = if is_draw {
                 (STALEMATE_SCORE, default_move)
             } else {
@@ -923,15 +887,6 @@ impl EvaluatorBot2010 {
 
             if evaluation >= beta {
                 // position is too good; opponent would never let us get here
-                // if depth > 3 {
-                //     trace!(
-                //         "beta cutoff {} - {} -> {} @ {}",
-                //         depth,
-                //         mv.to_string(),
-                //         resp.to_string(),
-                //         evaluation
-                //     );
-                // }
                 // a beta cutoff means we've failed high; this is a lower bound
                 self.transposition_table.insert(
                     board.get_hash(),
@@ -987,7 +942,7 @@ impl EvaluatorBot2010 {
         return (best_score, best_move);
     }
 
-    fn search_only_captures(
+    fn quiescence_search(
         &mut self,
         board: &Board,
         ply: usize,
@@ -1006,7 +961,7 @@ impl EvaluatorBot2010 {
         if movegen.len() == 0 {
             if board.status() == BoardStatus::Checkmate {
                 // trace!(
-                //     "found checkmate for {:?} in search_only_captures",
+                //     "found checkmate for {:?} in quiescence_search",
                 //     board.side_to_move()
                 // );
                 return CHECKMATE_SCORE;
@@ -1015,38 +970,84 @@ impl EvaluatorBot2010 {
             }
             // no attacking moves -> evaluate the board
         }
-        // assuming that this player can always take the evaluation on the board as is
-        // instead of making a capture - because many capture moves are bad
+
+        // if we are currently in check, this next move is forced
+        // i.e. we can't just take the board evaluation instead
+        let forced_move = board.checkers().popcnt() != 0;
+
+        // if the move isn't forced the player need not make it
         let evaluation = self.evaluate_material(board);
         self.search_stats.boards_evaluated += 1;
-        if evaluation >= beta {
-            // return beta;
-            return evaluation;
+
+        let mut best_eval = -99999999;
+
+        if !forced_move {
+            // if this move isn't forced, then we don't have to capture anything
+            if evaluation >= beta {
+                // return beta;
+                return evaluation;
+            }
+            if evaluation > alpha {
+                alpha = evaluation;
+            }
         }
-        if evaluation > alpha {
-            alpha = evaluation;
-        }
+
         // if we're in too deep, bail out
         if ply >= (2 + self.current_search_depth * 6).min(MAXIMUM_SEARCH_DEPTH) {
             // debug!("Bailing out at max search depth {}", ply);
             return evaluation;
         }
-        // first look through attacking moves
-        // for (mv, _) in self.get_moves_lazily_ordered(board, movegen) {
-        let mut best_eval = -99999999;
-        for mv in &mut movegen {
-            // clear out seen_positions after capture moves
-            // capture moves change everything such that the old positions are all useless, right?
+
+        for (mv, _) in self.get_moves_lazily_ordered(board, movegen, None) {
+            // Evaluate this move if ANY of these conditions is true
+            // (1) this move captures a piece
+            // (2) this move is a promotion
+            // (3) this move puts our opponent in check
+            // (4) we are in check right now - this move must get us out of it
+            //     and we want to consider our opponent's immediate response
             let nboard = board.make_move_new(mv);
-            let new_seen_positions = HashMap::new();
-            let move_search_score = self.search_only_captures(
-                &nboard,
-                ply + 1,
-                -beta,
-                -alpha,
-                kill_time,
-                &new_seen_positions,
-            );
+
+            // bouncer
+            if nboard.checkers().to_size(0) == 0 {
+                // this move does not put our opponent in check
+                if !forced_move
+                    && nboard.piece_on(mv.get_dest()).is_none()
+                    && mv.get_promotion().is_none()
+                {
+                    // we were not in check before this move
+                    // this move does not capture a piece
+                    // it is not a promotion
+                    // we do not check our opponent
+                    continue;
+                    // score = evaluation;
+                }
+            } else {
+                // this move puts our opponent in check
+                // to avoid super long sequences of moves we want to break out of here sometimes
+                if ply >= (self.current_search_depth * 5).min(CHECK_MV_SEARCH_DEPTH) {
+                    // debug!("Ignoring checks after check move search depth {}", ply);
+                    return best_eval.max(evaluation);
+                }
+            }
+            // check draw by repetition
+            let (new_seen_positions, is_draw) =
+                match check_for_draw(seen_positions.clone(), &nboard) {
+                    Ok(m) => (m, false),
+                    Err(_) => (HashMap::new(), true),
+                };
+
+            let move_search_score = if is_draw {
+                0
+            } else {
+                self.quiescence_search(
+                    &nboard,
+                    ply + 1,
+                    -beta,
+                    -alpha,
+                    kill_time,
+                    &new_seen_positions,
+                )
+            };
             let score = -move_search_score;
             self.search_stats.nodes_searched += 1;
             if score >= beta {
@@ -1062,72 +1063,7 @@ impl EvaluatorBot2010 {
                 alpha = score;
             }
         }
-        // then look through other moves
-        // unless we're too deep
-        // this can be quite common because of a lack of repetition detection
-        // limiting by current search depth keeps us from spiraling into
-        // infinity during low depth searches
-        if ply >= (self.current_search_depth * 5).min(CHECK_MV_SEARCH_DEPTH) {
-            // debug!("Ignoring checks after check move search depth {}", ply);
 
-            // trace!("seen_positions: {:?}", seen_positions);
-            return best_eval.max(evaluation);
-        }
-
-        movegen.set_iterator_mask(!chess::EMPTY);
-        for (mv, _) in self.get_moves_lazily_ordered(board, movegen, None) {
-            // we only want to continue evaluating if EITHER of these conditions is true
-            // (1) this move puts our opponent in check
-            // (2) we are in check right now - this move must get us out of it
-            //     and we want to consider our opponent's immediate response
-            let nboard = board.make_move_new(mv);
-            // bouncer
-            if (nboard.checkers().to_size(0) == 0) & (board.checkers().to_size(0) == 0) {
-                // this particular move is not interesting
-                // but there may be other interesting moves
-                continue;
-                // score = evaluation;
-            }
-            // keep searching deeper
-            let score;
-
-            // search for repetition
-            // it is too expensive to copy the whole game object
-            // so we keep this map of board hashes to the number of times we've seen them
-            // if we see the same board three times it's a draw by repetition
-            let (new_seen_positions, is_draw) =
-                match check_for_draw(seen_positions.clone(), &nboard) {
-                    Ok(m) => (m, false),
-                    Err(_) => (HashMap::new(), true),
-                };
-
-            let move_search_score = if is_draw {
-                0
-            } else {
-                self.search_only_captures(
-                    &nboard,
-                    ply + 1,
-                    -beta,
-                    -alpha,
-                    kill_time,
-                    &new_seen_positions,
-                )
-            };
-            score = -move_search_score;
-            self.search_stats.nodes_searched += 1;
-            if score >= beta {
-                // opponent would never let us get here
-                // return beta;
-                return score;
-            }
-            if score > best_eval {
-                best_eval = score;
-            }
-            if score > alpha {
-                // wow a great result!
-                alpha = score;
-            }
-        }
         return best_eval.max(evaluation);
         // return alpha;
     }
