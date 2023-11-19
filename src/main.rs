@@ -1,4 +1,4 @@
-use crate::evaluator::CrabChessEvaluator;
+use crate::crab_search::CrabChessSearch;
 use crate::speval::SinglePlayerEvaluator;
 use chess::Color::{Black, White};
 use chess::{Board, Game};
@@ -8,7 +8,9 @@ use std::io::{self, BufRead};
 use std::str::FromStr;
 use std::time::Duration;
 use vampirc_uci::{parse_one, UciMessage, UciSearchControl};
-pub mod evaluator;
+pub mod crab_evaluate;
+pub mod crab_search;
+pub mod crab_transposition;
 pub mod precomputed;
 pub mod speval;
 
@@ -97,7 +99,7 @@ fn main() -> Result<(), ()> {
 
 fn wait_for_uci() -> Result<(), ()> {
     let mut game = Game::new();
-    let mut evaluator = CrabChessEvaluator::new();
+    let mut evaluator = CrabChessSearch::new();
     let mut move_depth = 9;
     let default_think_time: i32 = 4000;
     let mut think_time: i32 = default_think_time;
@@ -233,7 +235,7 @@ fn wait_for_uci() -> Result<(), ()> {
 fn bot_vs_bot() {
     // let mut white_evaluator: evaluator::CrabChessEvaluator = CrabChessEvaluator::new();
     let mut white_evaluator = SinglePlayerEvaluator::new();
-    let mut black_evaluator: evaluator::CrabChessEvaluator = CrabChessEvaluator::new();
+    let mut black_evaluator = CrabChessSearch::new();
     let mut board: Board;
     let move_depth: usize = 12;
     let mut game = Game::new();
