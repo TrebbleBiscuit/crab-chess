@@ -13,6 +13,8 @@ const CHECK_MV_SEARCH_DEPTH: usize = 20; // search will only evaluate captures (
 const STALEMATE_SCORE: i32 = 0;
 const CHECKMATE_SCORE: i32 = -999995;
 
+const EXPECTED_NUM_MOVES: usize = 35;
+
 #[derive(Debug, Default, Clone, Copy)]
 pub struct SearchStats {
     nodes_searched: i32,
@@ -84,7 +86,8 @@ impl CrabChessSearch {
     ) -> Vec<(ChessMove, i32)> {
         // Pass in a MoveGen to grab moves from
         // returns a vector of moves lazily ordered by guess of which is best
-        let mut guess_values: Vec<(ChessMove, i32)> = Vec::new();
+        // use with_capacity to preallocate enough memory ahead of time
+        let mut guess_values: Vec<(ChessMove, i32)> = Vec::with_capacity(EXPECTED_NUM_MOVES);
         let mut guess_score: i32;
         let all_suggested_moves = match suggested_moves {
             Some(suggested_move) => suggested_move,
@@ -125,12 +128,7 @@ impl CrabChessSearch {
         }
 
         guess_values.sort_by(|a, b| b.1.cmp(&a.1));
-        let mut ordered_moves: Vec<(ChessMove, i32)> = Vec::new();
-        // order moves from best to worst
-        for (mv, score) in guess_values.iter() {
-            ordered_moves.push((*mv, *score))
-        }
-        ordered_moves
+        return guess_values
     }
 
     pub fn iterative_search_deepening(
@@ -142,7 +140,7 @@ impl CrabChessSearch {
     ) -> (i32, ChessMove) {
         let start_time = Instant::now();
         let mut score: i32 = 111111;
-        let mut move_order: Vec<(ChessMove, i32)> = Vec::new();
+        let mut move_order: Vec<(ChessMove, i32)> = Vec::with_capacity(EXPECTED_NUM_MOVES);
         let movegen: MoveGen = MoveGen::new_legal(&board);
         let mut chosen_move: ChessMove = ChessMove::new(Square::A1, Square::A1, None);
         let mut best_resp;
@@ -263,7 +261,7 @@ impl CrabChessSearch {
         // let mut moves_searched = Vec::new();
 
         // return move_values at the end, it'll be like the new version of move_order
-        let mut move_values: Vec<(ChessMove, i32)> = Vec::new();
+        let mut move_values: Vec<(ChessMove, i32)> = Vec::with_capacity(EXPECTED_NUM_MOVES);
         // debug!("Searching {} moves at depth {}", move_order.len(), depth);
         for (mv_index, (mv, mv_naive_score)) in move_order.iter().enumerate() {
             let nboard = board.make_move_new(*mv);
@@ -288,7 +286,7 @@ impl CrabChessSearch {
                     0
                 };
 
-                let mut needs_full_search = true;
+                let mut needs_full_search = true; // for now this is ALWAYS true - TODO: aspiration windows?
                 let mut move_search_score = 10101010; // this is ALWAYS overwritten
                 let mut best_response_mv = default_move; // this is ALWAYS overwritten
                                                          // but if i don't initialize them the compiler has a fit
@@ -327,6 +325,7 @@ impl CrabChessSearch {
                 // we can use this move if it's the first/only one we've looked at
                 // otherwise we discard this result
                 if best_move != default_move {
+                    // TODO: really discard?
                     break;
                 }
             }
@@ -346,7 +345,7 @@ impl CrabChessSearch {
         trace!("");
         move_values.sort_by(|a, b| b.1.cmp(&a.1));
         // trace!("Sored move values: {:#?}", move_values);
-        let mut order_moves: Vec<(ChessMove, i32)> = Vec::new();
+        let mut order_moves: Vec<(ChessMove, i32)> = Vec::with_capacity(EXPECTED_NUM_MOVES);
         // order moves from best to worst
         for (i, (mv, val)) in move_values.iter().enumerate() {
             if i > 0 && alpha > -900000 && *val < -900000 {
@@ -355,7 +354,13 @@ impl CrabChessSearch {
                 continue;
             }
             // let's also prune a move if we're reasonably deep and it looks absolutely terrible
-            if depth >= 4 && val + 750 < alpha {
+            if depth >= 4 && val + 600 < alpha {
+                continue;
+            }
+            if depth >= 5 && val + 400 < alpha {
+                continue;
+            }
+            if depth >= 6 && val + 300 < alpha {
                 continue;
             }
             order_moves.push((*mv, *val))
@@ -398,11 +403,14 @@ impl CrabChessSearch {
         // Search for the best move using alpha-beta pruning
         let default_move = ChessMove::new(Square::A1, Square::A1, None);
 
-        if board.status() == BoardStatus::Stalemate {
-            return (STALEMATE_SCORE, default_move);
-        }
-        if board.status() == BoardStatus::Checkmate {
-            return (CHECKMATE_SCORE, default_move);
+        match board.status() {
+            BoardStatus::Checkmate => {
+                return (CHECKMATE_SCORE, default_move)
+            },
+            BoardStatus::Stalemate => {
+                return (STALEMATE_SCORE, default_move)
+            },
+            _ => {}
         }
 
         let mut best_move: ChessMove = default_move;
@@ -569,10 +577,14 @@ impl CrabChessSearch {
         let mut movegen: MoveGen = MoveGen::new_legal(&board);
         movegen.set_iterator_mask(*targets);
         if movegen.len() == 0 {
-            if board.status() == BoardStatus::Checkmate {
-                return CHECKMATE_SCORE;
-            } else if board.status() == BoardStatus::Stalemate {
-                return STALEMATE_SCORE;
+            match board.status() {
+                BoardStatus::Checkmate => {
+                    return CHECKMATE_SCORE
+                },
+                BoardStatus::Stalemate => {
+                    return STALEMATE_SCORE
+                },
+                _ => {}
             }
             // no attacking moves -> evaluate the board
         }

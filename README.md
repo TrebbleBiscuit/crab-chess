@@ -27,11 +27,13 @@ uciok
 > ucinewgame
 > position startpos moves e2e4
 > go movetime 2500
-info depth 2 seldepth 0 score cp 12 time 13 pv g8f6 b1c3
-info depth 3 seldepth 8 score cp 48 time 40 pv g8f6 b1c3
-info depth 4 seldepth 12 score cp 12 time 215 pv g8f6 b1c3
-info depth 5 seldepth 21 score cp 42 time 2500 pv g8f6 e4e5
-bestmove g8f6
+info depth 2 seldepth 0 score cp 12 time 0 pv g8f6 b1c3
+info depth 3 seldepth 7 score cp 48 time 2 pv g8f6 b1c3
+info depth 4 seldepth 7 score cp 12 time 11 pv g8f6 b1c3
+info depth 5 seldepth 11 score cp 42 time 110 pv g8f6 e4e5
+info depth 6 seldepth 18 score cp 16 time 418 pv g8f6 e4e5
+info depth 7 seldepth 21 score cp 39 time 2500 pv b8c6 c2c4
+bestmove b8c6
 ```
 
 These commands tell the bot to

@@ -217,25 +217,32 @@ fn pawn_bonus_value(
     // let's do some bitboard stuff to figure out if this pawn is supported
 
     let file_index = square.get_file().to_index();
+    bonus_value += pawn_support_score(friendly_pawns, file_index);
+    return bonus_value;
+}
+
+fn pawn_support_score(friendly_pawns: &BitBoard, file_index: usize) -> i32 {
     let file_mask_center = FILE_MASKS[file_index];
     let file_mask_left = FILE_MASKS[(file_index).max(1) - 1];
     let file_mask_right = FILE_MASKS[(file_index + 1).min(7)];
 
+    let mut pawn_support_score = 0;
+
     // if more than one friendly pawn is in the same file, that's not ideal
-    bonus_value += match (friendly_pawns & BitBoard::new(file_mask_center)).popcnt() {
+    pawn_support_score += match (friendly_pawns.0 & file_mask_center).count_ones() {
         // this bonus will be applied to each pawn
         0 | 1 => 0,
-        2 => -10,
-        _ => -20,
+        2 => -15,
+        _ => -30,
     };
     // if a pawn is isolated, that's not ideal
-    bonus_value += match (friendly_pawns & BitBoard::new(file_mask_left | file_mask_right)).popcnt()
+    pawn_support_score += match (friendly_pawns.0 & (file_mask_left | file_mask_right)).count_ones()
     {
         0 => -20,
         1 => -6,
         _ => 0,
     };
-    return bonus_value;
+    return pawn_support_score;
 }
 
 fn endgame_king_modifier(king_square: Square, endgame_factor: u32) -> i32 {

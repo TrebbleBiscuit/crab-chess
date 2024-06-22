@@ -1,3 +1,4 @@
+#[allow(dead_code)]
 fn calculate_distance_between_squares() -> [[u32; 64]; 64] {
     let mut distances = [[0u32; 64]; 64];
     for to_square_index in 0..64 {
@@ -18,6 +19,7 @@ fn calculate_distance_between_squares() -> [[u32; 64]; 64] {
     distances
 }
 
+#[allow(dead_code)]
 fn gen_file_masks() -> [u64; 8] {
     let file_a_mask = 0x0101010101010101u64;
     let mut file_masks: [u64; 8] = [0; 8];
@@ -28,6 +30,7 @@ fn gen_file_masks() -> [u64; 8] {
 }
 // println!("{:#02x?}", gen_file_masks());
 
+#[allow(dead_code)]
 fn gen_triple_file_masks() -> [u64; 8] {
     let file_masks = gen_file_masks();
 
