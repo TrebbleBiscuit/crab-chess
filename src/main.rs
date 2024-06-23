@@ -250,7 +250,7 @@ fn benchmark() {
         &game.current_position(),
         &game,
         benchmark_depth,
-        Duration::from_secs(15),
+        Duration::from_secs(20),
     );
     println!("bestmove {mv}");
 }

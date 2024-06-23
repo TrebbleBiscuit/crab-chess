@@ -16,7 +16,7 @@ const FILE_MASKS: [u64; 8] = [
 ];
 
 // passed pawn bonus depends on number of squares to promotion
-const PASSED_PAWN_BONUS: [i32; 8] = [0, 150, 90, 50, 20, 15, 15, 15];
+const PASSED_PAWN_BONUS: [i32; 8] = [0, 200, 120, 70, 30, 20, 20, 20];
 
 const DISTANCE_FROM_CENTER: [i32; 64] = [
     6, 5, 4, 3, 3, 4, 5, 6, 5, 4, 3, 2, 2, 3, 4, 5, 4, 3, 2, 1, 1, 2, 3, 4, 3, 2, 1, 0, 0, 1, 2, 3,

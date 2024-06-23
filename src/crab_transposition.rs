@@ -34,14 +34,18 @@ pub struct TranspositionTable(chess::CacheTable<Transposition>);
 impl TranspositionTable {
     pub fn new() -> Self {
         Self(
-            // 2^18 is 262,144
-            // at ~40b each that's around 10.5 megabytes
-            chess::CacheTable::new(1 << 19, Transposition::empty()),
+            // 2^20 is 1,048,576
+            // at 24b each that's just over 25 megabytes
+            chess::CacheTable::new(1 << 20, Transposition::empty()),
         )
     }
 
     pub fn insert(&mut self, key: u64, value: Transposition) {
         self.0.add(key, value);
+    }
+
+    pub fn replace_if<F: Fn(Transposition) -> bool>(&mut self, key: u64, value: Transposition, replace: F) {
+        self.0.replace_if(key, value, replace);
     }
 
     pub fn get(&self, key: u64, depth: usize) -> Option<Transposition> {
