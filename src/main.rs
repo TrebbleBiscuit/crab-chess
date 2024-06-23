@@ -41,7 +41,7 @@ fn main() -> Result<(), ()> {
         match args[1].to_lowercase().as_str() {
             "--quiet" | "-q" => (false, "debug"),
             "--verbose" | "-v" => (true, "trace"),
-            _ => (true, "debug"),
+            _ => (false, "info"),
         }
     } else {
         (true, "debug")
