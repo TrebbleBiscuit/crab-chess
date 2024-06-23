@@ -44,7 +44,7 @@ fn main() -> Result<(), ()> {
             _ => (false, "info"),
         }
     } else {
-        (true, "debug")
+        (false, "debug")
     };
 
     if args.len() > 1 {

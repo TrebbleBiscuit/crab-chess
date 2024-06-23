@@ -269,14 +269,15 @@ impl CrabChessSearch {
                 continue;
             }
             // let's also prune a move if we're reasonably deep and it looks absolutely terrible
-            if depth >= 4 && mv_naive_score + 600 < alpha {
-                continue;
-            }
-            if depth >= 5 && mv_naive_score + 400 < alpha {
-                continue;
-            }
-            if depth >= 6 && mv_naive_score + 300 < alpha {
-                continue;
+            // we can do this at higher depths because the mv_naive_score is the evaluation from
+            // the search at a lower depth 
+            let mv_estimated_score_deficit = alpha - mv_naive_score;
+            match mv_estimated_score_deficit {
+                x if x > 600 && depth == 4 => continue,
+                x if x > 500 && depth == 5 => continue,
+                x if x > 400 && depth == 6 => continue,
+                x if x > 300 && depth >= 7 => continue,
+                _ => {}
             }
 
             let nboard = board.make_move_new(*mv);
