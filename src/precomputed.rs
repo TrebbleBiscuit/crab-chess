@@ -58,6 +58,21 @@ pub const TRIPLE_FILE_MASKS: [u64; 8] = [
     0xc0c0c0c0c0c0c0c0,
 ];
 
+#[allow(dead_code)]
+fn gen_isolation_file_masks() -> [u64; 8] {
+    let file_masks = gen_file_masks();
+    let mut iso_file_masks = [0; 8];
+    for file_index in 0..8 {
+        iso_file_masks[file_index] = match file_index {
+            0 => file_masks[(file_index + 1)],
+            7 => file_masks[(file_index) - 1],
+            _ => file_masks[(file_index) - 1] | file_masks[(file_index + 1)]
+        };
+    }
+    return iso_file_masks;
+}
+// println!("{:#02x?}", gen_isolation_file_masks());
+
 pub const DISTANCE_BETWEEN_SQUARES: [[u32; 64]; 64] = [
     [
         0, 1, 2, 3, 4, 5, 6, 7, 1, 1, 2, 3, 4, 5, 6, 7, 2, 2, 3, 4, 4, 5, 6, 7, 3, 3, 4, 4, 5, 6,

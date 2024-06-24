@@ -15,6 +15,17 @@ const FILE_MASKS: [u64; 8] = [
     0x8080808080808080,
 ];
 
+const ISOLATED_FILE_MASKS: [u64; 8] = [
+    0x202020202020202,
+    0x505050505050505,
+    0xa0a0a0a0a0a0a0a,
+    0x1414141414141414,
+    0x2828282828282828,
+    0x5050505050505050,
+    0xa0a0a0a0a0a0a0a0,
+    0x4040404040404040,
+];
+
 // passed pawn bonus depends on number of squares to promotion
 const PASSED_PAWN_BONUS: [i32; 8] = [0, 200, 120, 70, 30, 20, 20, 20];
 
@@ -222,21 +233,18 @@ fn pawn_bonus_value(
 }
 
 fn pawn_support_score(friendly_pawns: &BitBoard, file_index: usize) -> i32 {
-    let file_mask_center = FILE_MASKS[file_index];
-    let file_mask_left = FILE_MASKS[(file_index).max(1) - 1];
-    let file_mask_right = FILE_MASKS[(file_index + 1).min(7)];
-
     let mut pawn_support_score = 0;
 
     // if more than one friendly pawn is in the same file, that's not ideal
-    pawn_support_score += match (friendly_pawns.0 & file_mask_center).count_ones() {
+    pawn_support_score += match (friendly_pawns.0 & FILE_MASKS[file_index]).count_ones() {
         // this bonus will be applied to each pawn
         0 | 1 => 0,
         2 => -15,
         _ => -30,
     };
+
     // if a pawn is isolated, that's not ideal
-    pawn_support_score += match (friendly_pawns.0 & (file_mask_left | file_mask_right)).count_ones()
+    pawn_support_score += match (friendly_pawns.0 & ISOLATED_FILE_MASKS[file_index]).count_ones()
     {
         0 => -20,
         1 => -6,
