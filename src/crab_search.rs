@@ -15,6 +15,7 @@ const CHECKMATE_SCORE: i32 = -999995;
 
 const EXPECTED_NUM_MOVES: usize = 35;
 
+
 #[derive(Debug, Default, Clone, Copy)]
 pub struct SearchStats {
     nodes_searched: i32,
@@ -53,6 +54,7 @@ pub struct CrabChessSearch {
     search_stats: SearchStats,
     cum_search_stats: SearchStats,
     current_search_depth: usize,
+    default_move: ChessMove
 }
 
 impl CrabChessSearch {
@@ -75,6 +77,7 @@ impl CrabChessSearch {
             search_stats: SearchStats::default(),
             cum_search_stats: SearchStats::default(),
             current_search_depth: 0,
+            default_move: ChessMove::new(Square::A1, Square::A1, None)
         }
     }
 
@@ -128,6 +131,7 @@ impl CrabChessSearch {
         }
 
         guess_values.sort_by(|a, b| b.1.cmp(&a.1));
+        guess_values.shrink_to_fit();
         return guess_values
     }
 
@@ -238,6 +242,11 @@ impl CrabChessSearch {
         return (score, chosen_move);
     }
 
+    pub fn print_search_stats(&self) {
+        println!("Cumulative search stats:");
+        println!("{:?}", self.cum_search_stats);
+    }
+
     fn top_level_search(
         &mut self,
         board: &Board,
@@ -281,14 +290,13 @@ impl CrabChessSearch {
             }
 
             let nboard = board.make_move_new(*mv);
-            let default_move = ChessMove::new(Square::A1, Square::A1, None);
 
             // Check for threefold repetition
             let mut new_seen_positions = seen_positions.clone();
             let is_draw = check_for_draw(&mut new_seen_positions, nboard.get_hash());
 
             let (evaluation, this_response) = if is_draw {
-                (STALEMATE_SCORE, default_move)
+                (STALEMATE_SCORE, self.default_move)
             } else {
                 alpha -= 1; // so that if mate in 2 is 9998 then mate in 3 is 9997
 
@@ -298,13 +306,20 @@ impl CrabChessSearch {
                 } else {
                     0
                 };
+                // if depth >= 4 && mv_index > 4 {
+                //     // search less promising moves less deep
+                //     depth_modifier -= 1;
+                //     if depth >= 5 && mv_index > 8 {
+                //         depth_modifier -= 1;
+                //     }
+                // }
 
-                let mut needs_full_search = true; // for now this is ALWAYS true - TODO: aspiration windows?
+                let mut needs_full_search = true;
                 let mut move_search_score = 10101010; // this is ALWAYS overwritten
-                let mut best_response_mv = default_move; // this is ALWAYS overwritten
+                let mut best_response_mv = self.default_move; // this is ALWAYS overwritten
                                                          // but if i don't initialize them the compiler has a fit
 
-                if needs_full_search {
+                                                         if needs_full_search {
                     if depth_modifier < 0 {
                         // we already tried a shallow search but now need to
                         // perform a full search to get a more accurate result, make sure
@@ -337,7 +352,7 @@ impl CrabChessSearch {
                 // the result we got in this search may not be accurate
                 debug!("Out of time - {}", mv);
                 // discard incomplete moves
-                if best_move == default_move {
+                if best_move == self.default_move {
                     // this is the first and only move we've looked at
                     // so we'll return it
                     alpha = evaluation;
@@ -386,6 +401,7 @@ impl CrabChessSearch {
         debug!("Finished top level search! evaluation: {}", alpha);
 
         // println!("order_moves: {:?}", order_moves);
+        move_values.shrink_to_fit();
         return (alpha, best_move, move_values, best_response);
     }
 
@@ -402,18 +418,17 @@ impl CrabChessSearch {
         seen_positions: &HashMap<u64, ()>,
     ) -> (i32, ChessMove) {
         // Search for the best move using alpha-beta pruning
-        let default_move = ChessMove::new(Square::A1, Square::A1, None);
 
         let movegen: MoveGen = MoveGen::new_legal(&board);
         if movegen.len() == 0 {
             if board.checkers() == &EMPTY {
-                return (STALEMATE_SCORE, default_move)
+                return (STALEMATE_SCORE, self.default_move)
             } else {
-                return (CHECKMATE_SCORE, default_move)
+                return (CHECKMATE_SCORE, self.default_move)
             }
         }
 
-        let mut best_move: ChessMove = default_move;
+        let mut best_move: ChessMove = self.default_move;
         let mut best_score = -9999998; // this is distinct from alpha; it may be smaller if no moves are better
 
 
@@ -452,12 +467,7 @@ impl CrabChessSearch {
                 // get out of check first
                 depth += 1
             } else {
-                // assumes depth > 0 when this fn is called for the first time
-                // otherwise it will return default_move
-                return (
-                    self.quiescence_search(board, ply + 1, alpha, beta, kill_time, seen_positions),
-                    default_move,
-                );
+                return self.quiescence_search(board, ply + 1, alpha, beta, kill_time, suggested_moves, seen_positions);
             }
         }
 
@@ -465,16 +475,16 @@ impl CrabChessSearch {
         let mut this_node_type = NodeType::UpperBound;
 
         
-        let mut best_response: ChessMove = default_move;
+        let mut best_response: ChessMove = self.default_move;
 
         // look at every possible move from this position
-        for (mv, _) in self.get_moves_lazily_ordered(board, movegen, suggested_moves) {
+        for (mv_index, (mv, _)) in self.get_moves_lazily_ordered(board, movegen, suggested_moves).into_iter().enumerate() {
             let nboard = board.make_move_new(mv);
             // add this position to the map of positions we've seen before
             let mut new_seen_positions = seen_positions.clone();
             let is_draw = check_for_draw(&mut new_seen_positions, nboard.get_hash());
             let (move_search_score, sub_response) = if is_draw {
-                (STALEMATE_SCORE, default_move)
+                (STALEMATE_SCORE, self.default_move)
             } else {
                 self.search(
                     &nboard,
@@ -515,18 +525,16 @@ impl CrabChessSearch {
                 return (evaluation, mv);
                 // return (beta, mv);
             }
-            if evaluation > alpha {
-                alpha = evaluation;
-                best_score = evaluation;
-                best_move = mv;
-                best_response = sub_response;
-                // since at least one search exceeded alpha, we know it's exact
-                this_node_type = NodeType::Exact
-            } else if evaluation > best_score {
+            if evaluation > best_score {
                 // so that if no moves are better, this fn will return its own best result instead of the one given to it
                 best_score = evaluation;
                 best_move = mv;
                 best_response = sub_response;
+                if evaluation > alpha {
+                    alpha = evaluation;
+                    // since at least one search exceeded alpha, we know it's exact
+                    this_node_type = NodeType::Exact
+                }
             }
             // cancel search if we're out of time
             if kill_time.elapsed() > Duration::ZERO {
@@ -566,8 +574,9 @@ impl CrabChessSearch {
         mut alpha: i32,
         beta: i32,
         kill_time: &Instant,
+        suggested_moves: Option<Vec<&ChessMove>>, // try this move first
         seen_positions: &HashMap<u64, ()>,
-    ) -> i32 {
+    ) -> (i32, ChessMove) {
         if ply > self.search_stats.max_ply {
             self.search_stats.max_ply = ply
         }
@@ -576,9 +585,9 @@ impl CrabChessSearch {
         let mut movegen: MoveGen = MoveGen::new_legal(&board);
         if movegen.len() == 0 {
             if board.checkers() == &EMPTY {
-                return STALEMATE_SCORE
+                return (STALEMATE_SCORE, self.default_move)
             } else {
-                return CHECKMATE_SCORE
+                return (CHECKMATE_SCORE, self.default_move)
             }
         }
         movegen.set_iterator_mask(*targets);
@@ -597,7 +606,7 @@ impl CrabChessSearch {
             // if this move isn't forced, then we don't have to capture anything
             if evaluation >= beta {
                 // return beta;
-                return evaluation;
+                return (evaluation, self.default_move);
             }
             if evaluation > alpha {
                 alpha = evaluation;
@@ -607,10 +616,12 @@ impl CrabChessSearch {
         // if we're in too deep, bail out
         if ply >= (2 + self.current_search_depth * 6).min(MAXIMUM_SEARCH_DEPTH) {
             // debug!("Bailing out at max search depth {}", ply);
-            return evaluation;
+            return (evaluation, self.default_move);
         }
 
-        for (mv, _) in self.get_moves_lazily_ordered(board, movegen, None) {
+        let mut best_response: ChessMove = self.default_move;
+
+        for (mv, _) in self.get_moves_lazily_ordered(board, movegen, suggested_moves) {
             // Evaluate this move if ANY of these conditions is true
             // (1) this move captures a piece
             // (2) this move is a promotion
@@ -637,15 +648,15 @@ impl CrabChessSearch {
                 // to avoid super long sequences of moves we want to break out of here sometimes
                 if ply >= (self.current_search_depth * 5).min(CHECK_MV_SEARCH_DEPTH) {
                     // debug!("Ignoring checks after check move search depth {}", ply);
-                    return best_eval.max(evaluation);
+                    return (best_eval.max(evaluation), self.default_move);
                 }
             }
             // check draw by repetition
             let mut new_seen_positions = seen_positions.clone();
             let is_draw = check_for_draw(&mut new_seen_positions, nboard.get_hash());
 
-            let move_search_score = if is_draw {
-                0
+            let (move_search_score, sub_response) = if is_draw {
+                (0, self.default_move)
             } else {
                 self.quiescence_search(
                     &nboard,
@@ -653,6 +664,7 @@ impl CrabChessSearch {
                     -beta,
                     -alpha,
                     kill_time,
+                    Some(vec![&best_response]),
                     &new_seen_positions,
                 )
             };
@@ -661,18 +673,20 @@ impl CrabChessSearch {
             if score >= beta {
                 // opponent would never let us get here
                 // return beta;
-                return score;
+                return (score, sub_response);
             }
             if score > best_eval {
                 best_eval = score;
+                best_response = sub_response;
             }
             if score > alpha {
                 // wow a great result!
                 alpha = score;
+                best_response = sub_response;
             }
         }
 
-        return best_eval.max(evaluation);
+        return (best_eval.max(evaluation), best_response);
         // return alpha;
     }
 }
@@ -686,12 +700,4 @@ fn check_for_draw(
         seen_positions.insert(board_hash, ());
     }
     return has_seen;
-
-    // let value = seen_positions.entry(board.get_hash()).or_insert(0);
-    // *value += 1;
-    // if *value >= 2 {
-    //     Err(())
-    // } else {
-    //     Ok(seen_positions)
-    // }
 }
