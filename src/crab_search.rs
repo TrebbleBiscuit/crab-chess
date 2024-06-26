@@ -57,6 +57,40 @@ pub struct CrabChessSearch {
     default_move: ChessMove
 }
 
+// pub struct CrabChessSearchResult(i32, ChessMove);
+
+// fn do_smth() {
+//     let sr = CrabChessSearchResult(3, ChessMove::new(Square::A1, Square::A1, None));
+//     let (one, two) = (sr.0, sr.1);
+// }
+
+
+pub struct NodeScore {
+    score: i32,
+    best_move: ChessMove
+}
+
+impl NodeScore {
+    fn new(score: i32, best_move: ChessMove) -> Self {
+        NodeScore {
+            score,
+            best_move
+        }
+    }
+
+    fn stalemate() -> Self {
+        Self {
+            score:STALEMATE_SCORE, best_move:ChessMove::new(Square::A1, Square::A1, None)
+        }
+    }
+
+    fn checkmate() -> Self {
+        Self {
+            score:CHECKMATE_SCORE, best_move:ChessMove::new(Square::A1, Square::A1, None)
+        }
+    }
+}
+
 impl CrabChessSearch {
     pub fn new() -> CrabChessSearch {
         CrabChessSearch {
@@ -314,12 +348,12 @@ impl CrabChessSearch {
                 //     }
                 // }
 
-                let mut needs_full_search = true;
+                let needs_full_search = true;
                 let mut move_search_score = 10101010; // this is ALWAYS overwritten
                 let mut best_response_mv = self.default_move; // this is ALWAYS overwritten
-                                                         // but if i don't initialize them the compiler has a fit
+                // but if i don't initialize them the compiler has a fit
 
-                                                         if needs_full_search {
+                if needs_full_search {
                     if depth_modifier < 0 {
                         // we already tried a shallow search but now need to
                         // perform a full search to get a more accurate result, make sure
@@ -416,15 +450,15 @@ impl CrabChessSearch {
         kill_time: &Instant,
         suggested_moves: Option<Vec<&ChessMove>>, // try this move first
         seen_positions: &HashMap<u64, ()>,
-    ) -> (i32, ChessMove) {
+    ) -> NodeScore {
         // Search for the best move using alpha-beta pruning
 
         let movegen: MoveGen = MoveGen::new_legal(&board);
         if movegen.len() == 0 {
             if board.checkers() == &EMPTY {
-                return (STALEMATE_SCORE, self.default_move)
+                return NodeScore::stalemate();
             } else {
-                return (CHECKMATE_SCORE, self.default_move)
+                return NodeScore::checkmate();
             }
         }
 
@@ -441,13 +475,13 @@ impl CrabChessSearch {
                 NodeType::UpperBound => {
                     self.search_stats.tt_upper_hits += 1;
                     if transpo.score < beta {
-                        return (transpo.score, transpo.best_move);
+                        return NodeScore::new(transpo.score, transpo.best_move);
                     }
                 }
                 // if exact match, return that result
                 NodeType::Exact => {
                     self.search_stats.tt_exact_hits += 1;
-                    return (transpo.score, transpo.best_move);
+                    return NodeScore::new(transpo.score, transpo.best_move);
                 }
                 // if lower bound, check if eval > alpha; perhaps this is the best move
                 NodeType::LowerBound => {
@@ -563,8 +597,7 @@ impl CrabChessSearch {
                 }
             }
         }
-
-        return (best_score, best_move);
+        return NodeScore::new(best_score, best_move);
     }
 
     fn quiescence_search(
@@ -576,7 +609,7 @@ impl CrabChessSearch {
         kill_time: &Instant,
         suggested_moves: Option<Vec<&ChessMove>>, // try this move first
         seen_positions: &HashMap<u64, ()>,
-    ) -> (i32, ChessMove) {
+    ) -> NodeScore {
         if ply > self.search_stats.max_ply {
             self.search_stats.max_ply = ply
         }
@@ -685,8 +718,7 @@ impl CrabChessSearch {
                 best_response = sub_response;
             }
         }
-
-        return (best_eval.max(evaluation), best_response);
+        return NodeScore::new(best_eval.max(evaluation), best_response);
         // return alpha;
     }
 }
