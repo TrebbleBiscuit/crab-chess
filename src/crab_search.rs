@@ -361,7 +361,7 @@ impl CrabChessSearch {
                         depth_modifier = 0;
                         // self.search_stats.depth_reduction_misses += 1;
                     };
-                    (move_search_score, best_response_mv) = self.search(
+                    let search_result = self.search(
                         &nboard,
                         // &hgame,
                         depth + depth_modifier as usize - 1,
@@ -372,6 +372,7 @@ impl CrabChessSearch {
                         Some(vec![&best_response]),
                         &new_seen_positions,
                     );
+                    (move_search_score, best_response_mv) = (search_result.score, search_result.best_move);
                 }
                 alpha += 1;
                 // move_search_score is the score of the best response move from our opponent
@@ -520,7 +521,7 @@ impl CrabChessSearch {
             let (move_search_score, sub_response) = if is_draw {
                 (STALEMATE_SCORE, self.default_move)
             } else {
-                self.search(
+                let search_result = self.search(
                     &nboard,
                     // &hyp_game,
                     depth - 1,
@@ -530,7 +531,8 @@ impl CrabChessSearch {
                     kill_time,
                     Some(vec![&best_response]),
                     &new_seen_positions,
-                )
+                );
+                (search_result.score, search_result.best_move)
             };
             // we don't have all the nodes on this tree yet
 
@@ -556,7 +558,7 @@ impl CrabChessSearch {
                         best_move: mv,
                     },
                 );
-                return (evaluation, mv);
+                return NodeScore::new(evaluation, mv);
                 // return (beta, mv);
             }
             if evaluation > best_score {
@@ -618,9 +620,9 @@ impl CrabChessSearch {
         let mut movegen: MoveGen = MoveGen::new_legal(&board);
         if movegen.len() == 0 {
             if board.checkers() == &EMPTY {
-                return (STALEMATE_SCORE, self.default_move)
+                return NodeScore::stalemate()
             } else {
-                return (CHECKMATE_SCORE, self.default_move)
+                return NodeScore::checkmate()
             }
         }
         movegen.set_iterator_mask(*targets);
@@ -639,7 +641,7 @@ impl CrabChessSearch {
             // if this move isn't forced, then we don't have to capture anything
             if evaluation >= beta {
                 // return beta;
-                return (evaluation, self.default_move);
+                return NodeScore::new(evaluation, self.default_move);
             }
             if evaluation > alpha {
                 alpha = evaluation;
@@ -649,7 +651,7 @@ impl CrabChessSearch {
         // if we're in too deep, bail out
         if ply >= (2 + self.current_search_depth * 6).min(MAXIMUM_SEARCH_DEPTH) {
             // debug!("Bailing out at max search depth {}", ply);
-            return (evaluation, self.default_move);
+            return NodeScore::new(evaluation, self.default_move);
         }
 
         let mut best_response: ChessMove = self.default_move;
@@ -681,7 +683,7 @@ impl CrabChessSearch {
                 // to avoid super long sequences of moves we want to break out of here sometimes
                 if ply >= (self.current_search_depth * 5).min(CHECK_MV_SEARCH_DEPTH) {
                     // debug!("Ignoring checks after check move search depth {}", ply);
-                    return (best_eval.max(evaluation), self.default_move);
+                    return NodeScore::new(best_eval.max(evaluation), self.default_move);
                 }
             }
             // check draw by repetition
@@ -691,7 +693,7 @@ impl CrabChessSearch {
             let (move_search_score, sub_response) = if is_draw {
                 (0, self.default_move)
             } else {
-                self.quiescence_search(
+                let search_result = self.quiescence_search(
                     &nboard,
                     ply + 1,
                     -beta,
@@ -699,14 +701,15 @@ impl CrabChessSearch {
                     kill_time,
                     Some(vec![&best_response]),
                     &new_seen_positions,
-                )
+                );
+                (search_result.score, search_result.best_move)
             };
             let score = -move_search_score;
             self.search_stats.nodes_searched += 1;
             if score >= beta {
                 // opponent would never let us get here
                 // return beta;
-                return (score, sub_response);
+                return NodeScore::new(score, sub_response);
             }
             if score > best_eval {
                 best_eval = score;
