@@ -181,7 +181,7 @@ impl CrabChessSearch {
         let mut score: i32 = 111111;
         let mut move_order: Vec<(ChessMove, i32)> = Vec::with_capacity(EXPECTED_NUM_MOVES);
         let movegen: MoveGen = MoveGen::new_legal(&board);
-        let mut chosen_move: ChessMove = ChessMove::new(Square::A1, Square::A1, None);
+        let mut chosen_move: ChessMove = self.default_move;
         let mut best_resp;
 
         trace!("---- start search ----");
@@ -238,7 +238,7 @@ impl CrabChessSearch {
                 score,
                 start_time.elapsed().as_millis(),
                 chosen_move,
-                if best_resp == ChessMove::new(Square::A1, Square::A1, None) {
+                if best_resp == self.default_move {
                     "".to_string()
                 } else {
                     best_resp.to_string()
@@ -298,13 +298,14 @@ impl CrabChessSearch {
         // Do not get top level search from transposition table!
         // this is so that we can order all the moves, making iterative deepening blazing fast
 
-        let mut best_move = ChessMove::new(Square::A1, Square::A1, None); // default;
-        let mut best_response = ChessMove::new(Square::A1, Square::A1, None);
+        let mut best_move = self.default_move; // default;
+        let mut best_response = self.default_move;
         // let mut moves_searched = Vec::new();
 
         // return move_values at the end, it'll be like the new version of move_order
         let mut move_values: Vec<(ChessMove, i32)> = Vec::with_capacity(EXPECTED_NUM_MOVES);
         // debug!("Searching {} moves at depth {}", move_order.len(), depth);
+
         for (mv_index, (mv, mv_naive_score)) in move_order.iter().enumerate() {
 
             // first let's make sure we actually want to consider this move
@@ -330,6 +331,8 @@ impl CrabChessSearch {
             let mut new_seen_positions = seen_positions.clone();
             let is_draw = check_for_draw(&mut new_seen_positions, nboard.get_hash());
 
+            // TODO: Get rid of this horrible giant assignment expression
+            // and just make `evaluation` and `this_response` mutable variables
             let (evaluation, this_response) = if is_draw {
                 (STALEMATE_SCORE, self.default_move)
             } else {
@@ -350,8 +353,10 @@ impl CrabChessSearch {
                 // }
 
                 let needs_full_search = true;
+
+                // these variables are ASSIGNED to other names outside this huge expression we're in
                 let mut move_search_score = 10101010; // this is ALWAYS overwritten
-                let mut best_response_mv = self.default_move; // this is ALWAYS overwritten
+                let mut sub_response_mv = self.default_move; // this is ALWAYS overwritten
                 // but if i don't initialize them the compiler has a fit
 
                 if needs_full_search {
@@ -373,12 +378,12 @@ impl CrabChessSearch {
                         Some(vec![&best_response]),
                         &new_seen_positions,
                     );
-                    (move_search_score, best_response_mv) = (search_result.score, search_result.best_move);
+                    (move_search_score, sub_response_mv) = (search_result.score, search_result.best_move);
                 }
                 alpha += 1;
                 // move_search_score is the score of the best response move from our opponent
                 // invert it; we'll pick the move with the highest score - gives our opponent the worst best response
-                (-move_search_score, best_response_mv)
+                (-move_search_score, sub_response_mv)
             };
             move_values.push((*mv, evaluation));
             self.search_stats.nodes_searched += 1;
@@ -514,7 +519,7 @@ impl CrabChessSearch {
         let mut best_response: ChessMove = self.default_move;
 
         // look at every possible move from this position
-        for (mv_index, (mv, _)) in self.get_moves_lazily_ordered(board, movegen, suggested_moves).into_iter().enumerate() {
+        for (_mv_index, (mv, _)) in self.get_moves_lazily_ordered(board, movegen, suggested_moves).into_iter().enumerate() {
             let nboard = board.make_move_new(mv);
             // add this position to the map of positions we've seen before
             let mut new_seen_positions = seen_positions.clone();
