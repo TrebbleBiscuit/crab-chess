@@ -164,6 +164,7 @@ impl CrabChessSearch {
             guess_values.push((mv, guess_score))
         }
 
+        // sort_by seems to perform MUCH better than sort_unstable_by 
         guess_values.sort_by(|a, b| b.1.cmp(&a.1));
         guess_values.shrink_to_fit();
         return guess_values
@@ -413,6 +414,7 @@ impl CrabChessSearch {
             }
         }
         trace!("");
+        // sort_by seems to perform MUCH better than sort_unstable_by
         move_values.sort_by(|a, b| b.1.cmp(&a.1));
         // trace!("Sored move values: {:#?}", move_values);
 
@@ -463,9 +465,8 @@ impl CrabChessSearch {
             }
         }
 
-        let mut best_move: ChessMove = self.default_move;
-        let mut best_score = -9999998; // this is distinct from alpha; it may be smaller if no moves are better
-
+        // the score of this node is distinct from alpha; it may be smaller if no moves are better
+        let mut this_node_score = NodeScore::new(-9999998, self.default_move);
 
         let board_hash = board.get_hash();
         if let Some(transpo) = self.transposition_table.get(board_hash, depth) {
@@ -490,8 +491,8 @@ impl CrabChessSearch {
                     if transpo.score > alpha {
                         // this could be a good move
                         alpha = transpo.score;
-                        best_move = transpo.best_move;
-                        best_score = transpo.score;
+                        this_node_score.best_move = transpo.best_move;
+                        this_node_score.score = transpo.score;
                     }
                 }
             }
@@ -561,10 +562,10 @@ impl CrabChessSearch {
                 return NodeScore::new(evaluation, mv);
                 // return (beta, mv);
             }
-            if evaluation > best_score {
+            if evaluation > this_node_score.score {
                 // so that if no moves are better, this fn will return its own best result instead of the one given to it
-                best_score = evaluation;
-                best_move = mv;
+                this_node_score.score = evaluation;
+                this_node_score.best_move = mv;
                 best_response = sub_response;
                 if evaluation > alpha {
                     alpha = evaluation;
@@ -591,15 +592,15 @@ impl CrabChessSearch {
                         Transposition {
                             depth,
                             ply,
-                            score: best_score,
+                            score: this_node_score.score,
                             node_type: this_node_type,
-                            best_move,
+                            best_move: this_node_score.best_move,
                         },
                     )
                 }
             }
         }
-        return NodeScore::new(best_score, best_move);
+        return this_node_score;
     }
 
     fn quiescence_search(
@@ -635,7 +636,7 @@ impl CrabChessSearch {
         let evaluation = crab_evaluate::evaluate_material(board);
         self.search_stats.boards_evaluated += 1;
 
-        let mut best_eval = -99999999;
+        let mut this_node_score = NodeScore::new(evaluation, self.default_move);
 
         if !forced_move {
             // if this move isn't forced, then we don't have to capture anything
@@ -683,7 +684,7 @@ impl CrabChessSearch {
                 // to avoid super long sequences of moves we want to break out of here sometimes
                 if ply >= (self.current_search_depth * 5).min(CHECK_MV_SEARCH_DEPTH) {
                     // debug!("Ignoring checks after check move search depth {}", ply);
-                    return NodeScore::new(best_eval.max(evaluation), self.default_move);
+                    return this_node_score;
                 }
             }
             // check draw by repetition
@@ -709,10 +710,11 @@ impl CrabChessSearch {
             if score >= beta {
                 // opponent would never let us get here
                 // return beta;
-                return NodeScore::new(score, sub_response);
+                return NodeScore::new(score, mv);
             }
-            if score > best_eval {
-                best_eval = score;
+            if score > this_node_score.score {
+                this_node_score.score = score;
+                this_node_score.best_move = mv;
                 best_response = sub_response;
             }
             if score > alpha {
@@ -721,7 +723,7 @@ impl CrabChessSearch {
                 best_response = sub_response;
             }
         }
-        return NodeScore::new(best_eval.max(evaluation), best_response);
+        return this_node_score;
         // return alpha;
     }
 }
