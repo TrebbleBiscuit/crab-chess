@@ -124,7 +124,7 @@ impl CrabChessSearch {
         // Pass in a MoveGen to grab moves from
         // returns a vector of moves lazily ordered by guess of which is best
         // use with_capacity to preallocate enough memory ahead of time
-        let mut guess_values: Vec<(ChessMove, i32)> = Vec::with_capacity(EXPECTED_NUM_MOVES);
+        let mut guess_values: Vec<(ChessMove, i32)> = Vec::with_capacity(move_iterator.len());
         let mut guess_score: i32;
         for mv in move_iterator {
             // evaluating material here is too expensive
@@ -132,37 +132,37 @@ impl CrabChessSearch {
 
             if let Some(position) = suggested_moves.iter().position(|&x| x == mv) {
                 // moves added later exceeded alpha later, so they're better
+                // don't do any other guess_score modification on these moves
                 guess_score += 8000 + (1000 * position as i32);
-            }
-
-            // promotions are good
-            if let Some(piece) = mv.get_promotion() {
-                if piece == Piece::Queen {
-                    guess_score += 900
+            } else {
+                // promotions are good
+                if let Some(piece) = mv.get_promotion() {
+                    if piece == Piece::Queen {
+                        guess_score += 900
+                    }
                 }
-            }
 
-            let move_target = mv.get_dest();
-            if let Some(piece) = board.piece_on(move_target) {
-                // for captures, score is enemy piece value minus a fraction of our piece value
-                // capturing cheap pieces with valuable pieces is likely a bad idea
-                guess_score += self.piece_values.get(&piece).unwrap()
-                    - (self
-                        .piece_values
-                        .get(&board.piece_on(mv.get_source()).unwrap())
-                        .unwrap()
-                        / 2);
-                // a capture that can be recaptured by an enemy is worse
-                // let pawn_attacks =
-                //     chess::get_pawn_attacks(move_target, board.side_to_move(), BitBoard::new(0));
-                // trace!("pawn attacks: {}", pawn_attacks)
+                let move_target = mv.get_dest();
+                if let Some(piece) = board.piece_on(move_target) {
+                    // for captures, score is enemy piece value minus a fraction of our piece value
+                    // capturing cheap pieces with valuable pieces is likely a bad idea
+                    guess_score += self.piece_values.get(&piece).unwrap()
+                        - (self
+                            .piece_values
+                            .get(&board.piece_on(mv.get_source()).unwrap())
+                            .unwrap()
+                            / 2);
+                    // a capture that can be recaptured by an enemy is worse
+                    // let pawn_attacks =
+                        // chess::get_pawn_attacks(move_target, board.side_to_move(), BitBoard::new(0));
+                    // trace!("pawn attacks: {}", pawn_attacks)
+                }
             }
             guess_values.push((mv, guess_score))
         }
 
         // sort_by seems to perform MUCH better than sort_unstable_by 
         guess_values.sort_by(|a, b| b.1.cmp(&a.1));
-        guess_values.shrink_to_fit();
         return guess_values
     }
 
