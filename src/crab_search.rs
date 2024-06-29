@@ -119,24 +119,20 @@ impl CrabChessSearch {
         &self,
         board: &Board,
         move_iterator: MoveGen,
-        suggested_moves: Option<Vec<&ChessMove>>,
+        suggested_moves: Vec<ChessMove>,
     ) -> Vec<(ChessMove, i32)> {
         // Pass in a MoveGen to grab moves from
         // returns a vector of moves lazily ordered by guess of which is best
         // use with_capacity to preallocate enough memory ahead of time
         let mut guess_values: Vec<(ChessMove, i32)> = Vec::with_capacity(EXPECTED_NUM_MOVES);
         let mut guess_score: i32;
-        let all_suggested_moves = match suggested_moves {
-            Some(suggested_move) => suggested_move,
-            None => vec![],
-        };
         for mv in move_iterator {
             // evaluating material here is too expensive
             guess_score = 0;
 
-            // push suggested moves up
-            if all_suggested_moves.contains(&&mv) {
-                guess_score += 10000
+            if let Some(position) = suggested_moves.iter().position(|&x| x == mv) {
+                // moves added later exceeded alpha later, so they're better
+                guess_score += 8000 + (1000 * position as i32);
             }
 
             // promotions are good
@@ -191,7 +187,7 @@ impl CrabChessSearch {
         // self.transposition_table = HashMap::new();
 
         let kill_time = Instant::now() + time_low_bar;
-        for mv in self.get_moves_lazily_ordered(board, movegen, None) {
+        for mv in self.get_moves_lazily_ordered(board, movegen, Vec::new()) {
             move_order.push(mv)
         }
         // if depth < 3 {
@@ -375,7 +371,7 @@ impl CrabChessSearch {
                         -beta,
                         -alpha,
                         kill_time,
-                        Some(vec![&best_response]),
+                        vec![best_response],
                         &new_seen_positions,
                     );
                     (move_search_score, sub_response_mv) = (search_result.score, search_result.best_move);
@@ -456,7 +452,7 @@ impl CrabChessSearch {
         mut alpha: i32,
         beta: i32,
         kill_time: &Instant,
-        suggested_moves: Option<Vec<&ChessMove>>, // try this move first
+        suggested_moves: Vec<ChessMove>, // try this move first
         seen_positions: &HashMap<u64, ()>,
     ) -> NodeScore {
         // Search for the best move using alpha-beta pruning
@@ -516,7 +512,7 @@ impl CrabChessSearch {
         let mut this_node_type = NodeType::UpperBound;
 
         
-        let mut best_response: ChessMove = self.default_move;
+        let mut best_responses: Vec<ChessMove> = Vec::new();
 
         // look at every possible move from this position
         for (_mv_index, (mv, _)) in self.get_moves_lazily_ordered(board, movegen, suggested_moves).into_iter().enumerate() {
@@ -535,7 +531,7 @@ impl CrabChessSearch {
                     -beta,
                     -alpha,
                     kill_time,
-                    Some(vec![&best_response]),
+                    best_responses.clone(),
                     &new_seen_positions,
                 );
                 (search_result.score, search_result.best_move)
@@ -571,7 +567,7 @@ impl CrabChessSearch {
                 // so that if no moves are better, this fn will return its own best result instead of the one given to it
                 this_node_score.score = evaluation;
                 this_node_score.best_move = mv;
-                best_response = sub_response;
+                best_responses.push(sub_response);
                 if evaluation > alpha {
                     alpha = evaluation;
                     // since at least one search exceeded alpha, we know it's exact
@@ -615,7 +611,7 @@ impl CrabChessSearch {
         mut alpha: i32,
         beta: i32,
         kill_time: &Instant,
-        suggested_moves: Option<Vec<&ChessMove>>, // try this move first
+        suggested_moves: Vec<ChessMove>, // try this move first
         seen_positions: &HashMap<u64, ()>,
     ) -> NodeScore {
         if ply > self.search_stats.max_ply {
@@ -660,7 +656,7 @@ impl CrabChessSearch {
             return NodeScore::new(evaluation, self.default_move);
         }
 
-        let mut best_response: ChessMove = self.default_move;
+        let mut best_responses: Vec<ChessMove> = Vec::new();
 
         for (mv, _) in self.get_moves_lazily_ordered(board, movegen, suggested_moves) {
             // Evaluate this move if ANY of these conditions is true
@@ -705,7 +701,7 @@ impl CrabChessSearch {
                     -beta,
                     -alpha,
                     kill_time,
-                    Some(vec![&best_response]),
+                    best_responses.clone(),
                     &new_seen_positions,
                 );
                 (search_result.score, search_result.best_move)
@@ -720,12 +716,12 @@ impl CrabChessSearch {
             if score > this_node_score.score {
                 this_node_score.score = score;
                 this_node_score.best_move = mv;
-                best_response = sub_response;
+                best_responses.push(sub_response);
             }
             if score > alpha {
                 // wow a great result!
                 alpha = score;
-                best_response = sub_response;
+                best_responses.push(sub_response);
             }
         }
         return this_node_score;
