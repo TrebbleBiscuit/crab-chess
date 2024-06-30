@@ -10,7 +10,6 @@ use std::time::{Duration, Instant};
 
 const MAXIMUM_SEARCH_DEPTH: usize = 40; // search will NEVER exceed this depth
 const CHECK_MV_SEARCH_DEPTH: usize = 20; // search will only evaluate captures (not check) after this depth
-const EXTENSION_LIMIT: usize = 16;  // search extensions will not extend past this depth
 
 const STALEMATE_SCORE: i32 = 0;
 const CHECKMATE_SCORE: i32 = -999995;
