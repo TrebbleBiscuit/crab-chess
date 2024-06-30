@@ -1,6 +1,7 @@
 use crate::crab_evaluate;
 use crate::crab_transposition;
 use chess::Piece::{Bishop, King, Knight, Pawn, Queen, Rook};
+use chess::Rank;
 use chess::{Board, ChessMove, Game, MoveGen, Piece, Square, EMPTY};
 use crab_transposition::{NodeType, Transposition, TranspositionTable};
 use log::{debug, trace};
@@ -9,11 +10,10 @@ use std::time::{Duration, Instant};
 
 const MAXIMUM_SEARCH_DEPTH: usize = 40; // search will NEVER exceed this depth
 const CHECK_MV_SEARCH_DEPTH: usize = 20; // search will only evaluate captures (not check) after this depth
+const EXTENSION_LIMIT: usize = 16;  // search extensions will not extend past this depth
 
 const STALEMATE_SCORE: i32 = 0;
 const CHECKMATE_SCORE: i32 = -999995;
-
-const EXPECTED_NUM_MOVES: usize = 35;
 
 
 #[derive(Debug, Default, Clone, Copy)]
@@ -175,8 +175,8 @@ impl CrabChessSearch {
     ) -> (i32, ChessMove) {
         let start_time = Instant::now();
         let mut score: i32 = 111111;
-        let mut move_order: Vec<(ChessMove, i32)> = Vec::with_capacity(EXPECTED_NUM_MOVES);
         let movegen: MoveGen = MoveGen::new_legal(&board);
+        let mut move_order: Vec<(ChessMove, i32)> = Vec::with_capacity(movegen.len());
         let mut chosen_move: ChessMove = self.default_move;
         let mut best_resp;
 
@@ -299,7 +299,7 @@ impl CrabChessSearch {
         // let mut moves_searched = Vec::new();
 
         // return move_values at the end, it'll be like the new version of move_order
-        let mut move_values: Vec<(ChessMove, i32)> = Vec::with_capacity(EXPECTED_NUM_MOVES);
+        let mut move_values: Vec<(ChessMove, i32)> = Vec::with_capacity(move_order.len());
         // debug!("Searching {} moves at depth {}", move_order.len(), depth);
 
         for (mv_index, (mv, mv_naive_score)) in move_order.iter().enumerate() {
@@ -511,8 +511,9 @@ impl CrabChessSearch {
         // for future transposition table
         let mut this_node_type = NodeType::UpperBound;
 
-        
-        let mut best_responses: Vec<ChessMove> = Vec::new();
+        // best_responses will usually only have a small number of moves
+        // but we'll allocate for the maximum possible size
+        let mut best_responses: Vec<ChessMove> = Vec::with_capacity(movegen.len());
 
         // look at every possible move from this position
         for (_mv_index, (mv, _)) in self.get_moves_lazily_ordered(board, movegen, suggested_moves).into_iter().enumerate() {
@@ -656,7 +657,9 @@ impl CrabChessSearch {
             return NodeScore::new(evaluation, self.default_move);
         }
 
-        let mut best_responses: Vec<ChessMove> = Vec::new();
+        // best_responses will usually only have a small number of moves
+        // but we'll allocate for the maximum possible size
+        let mut best_responses: Vec<ChessMove> = Vec::with_capacity(movegen.len());
 
         for (mv, _) in self.get_moves_lazily_ordered(board, movegen, suggested_moves) {
             // Evaluate this move if ANY of these conditions is true
