@@ -47,16 +47,6 @@ fn main() -> Result<(), ()> {
         (false, "debug")
     };
 
-    if args.len() > 1 {
-        match args[1].to_lowercase().as_str() {
-            "bench" => {
-                benchmark();
-                return Ok(())
-            },
-            _ => {}
-        }
-    }
-
     if log_enabled {
         // log to file and also to stdout
         if let Ok(my_logger) = flexi_logger::Logger::try_with_str(log_level) {
@@ -77,6 +67,14 @@ fn main() -> Result<(), ()> {
                     panic!("couldn't set up logger! try --quiet")
                 }
             };
+        }
+    }
+
+    if args.len() > 1 {
+        if args[1].to_lowercase().as_str() == "bench" || args[2].to_lowercase().as_str() == "bench"
+        {
+            benchmark();
+            return Ok(());
         }
     }
 
@@ -145,8 +143,8 @@ fn wait_for_uci() -> Result<(), ()> {
                         game = new_game;
                     }
                 }
-                for each_move in moves.iter() {
-                    game.make_move(*each_move);
+                for each_move in moves {
+                    game.make_move(each_move);
                 }
             }
             UciMessage::Go {
