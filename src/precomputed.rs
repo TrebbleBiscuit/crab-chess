@@ -1,3 +1,4 @@
+#[allow(dead_code)]
 fn calculate_distance_between_squares() -> [[u32; 64]; 64] {
     let mut distances = [[0u32; 64]; 64];
     for to_square_index in 0..64 {
@@ -18,6 +19,7 @@ fn calculate_distance_between_squares() -> [[u32; 64]; 64] {
     distances
 }
 
+#[allow(dead_code)]
 fn gen_file_masks() -> [u64; 8] {
     let file_a_mask = 0x0101010101010101u64;
     let mut file_masks: [u64; 8] = [0; 8];
@@ -28,6 +30,7 @@ fn gen_file_masks() -> [u64; 8] {
 }
 // println!("{:#02x?}", gen_file_masks());
 
+#[allow(dead_code)]
 fn gen_triple_file_masks() -> [u64; 8] {
     let file_masks = gen_file_masks();
 
@@ -54,6 +57,21 @@ pub const TRIPLE_FILE_MASKS: [u64; 8] = [
     0xe0e0e0e0e0e0e0e0,
     0xc0c0c0c0c0c0c0c0,
 ];
+
+#[allow(dead_code)]
+fn gen_isolation_file_masks() -> [u64; 8] {
+    let file_masks = gen_file_masks();
+    let mut iso_file_masks = [0; 8];
+    for file_index in 0..8 {
+        iso_file_masks[file_index] = match file_index {
+            0 => file_masks[(file_index + 1)],
+            7 => file_masks[(file_index) - 1],
+            _ => file_masks[(file_index) - 1] | file_masks[(file_index + 1)]
+        };
+    }
+    return iso_file_masks;
+}
+// println!("{:#02x?}", gen_isolation_file_masks());
 
 pub const DISTANCE_BETWEEN_SQUARES: [[u32; 64]; 64] = [
     [

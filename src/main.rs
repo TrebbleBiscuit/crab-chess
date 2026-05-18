@@ -7,7 +7,7 @@ use std::env;
 use std::io::{self, BufRead};
 use std::str::FromStr;
 use std::time::Duration;
-use vampirc_uci::{parse_one, UciMessage, UciSearchControl};
+use vampirc_uci::{parse_one, UciMessage};
 pub mod crab_evaluate;
 pub mod crab_search;
 pub mod crab_transposition;
@@ -35,16 +35,16 @@ fn program_file_name() -> String {
 }
 
 fn main() -> Result<(), ()> {
+    // parse arguments to get logging level
     let args: Vec<String> = env::args().collect();
-    // human color provided by first argument, otherwise AI vs AI
     let (log_enabled, log_level) = if args.len() > 1 {
         match args[1].to_lowercase().as_str() {
             "--quiet" | "-q" => (false, "debug"),
             "--verbose" | "-v" => (true, "trace"),
-            _ => (true, "debug"),
+            _ => (false, "info"),
         }
     } else {
-        (true, "debug")
+        (false, "debug")
     };
 
     if log_enabled {
@@ -67,6 +67,14 @@ fn main() -> Result<(), ()> {
                     panic!("couldn't set up logger! try --quiet")
                 }
             };
+        }
+    }
+
+    if args.len() > 1 {
+        if args[1].to_lowercase().as_str() == "bench" || args[2].to_lowercase().as_str() == "bench"
+        {
+            benchmark();
+            return Ok(());
         }
     }
 
@@ -135,8 +143,8 @@ fn wait_for_uci() -> Result<(), ()> {
                         game = new_game;
                     }
                 }
-                for each_move in moves.iter() {
-                    game.make_move(*each_move);
+                for each_move in moves {
+                    game.make_move(each_move);
                 }
             }
             UciMessage::Go {
@@ -157,7 +165,7 @@ fn wait_for_uci() -> Result<(), ()> {
                             black_time,
                             white_increment,
                             black_increment,
-                            moves_to_go,
+                            moves_to_go: _,
                         } => {
                             let remaining_time;
                             let my_increment;
@@ -232,14 +240,27 @@ fn wait_for_uci() -> Result<(), ()> {
     Ok(())
 }
 
+fn benchmark() {
+    let mut evaluator = CrabChessSearch::new();
+    let game = Game::new();
+    let benchmark_depth = 9;
+    let (_value, mv) = evaluator.iterative_search_deepening(
+        &game.current_position(),
+        &game,
+        benchmark_depth,
+        Duration::from_secs(20),
+    );
+    println!("bestmove {mv}");
+}
+
 fn bot_vs_bot() {
     // let mut white_evaluator: evaluator::CrabChessEvaluator = CrabChessEvaluator::new();
-    let mut white_evaluator = SinglePlayerEvaluator::new();
+    let white_evaluator = SinglePlayerEvaluator::new();
     let mut black_evaluator = CrabChessSearch::new();
     let mut board: Board;
     let move_depth: usize = 12;
     let mut game = Game::new();
-    let mut move_duration = Duration::from_millis(300);
+    let move_duration = Duration::from_millis(300);
     loop {
         board = game.current_position();
         debug!(
